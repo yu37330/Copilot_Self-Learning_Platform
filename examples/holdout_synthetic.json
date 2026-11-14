@@ -1,0 +1,35 @@
+{
+  "label_source": "synthetic_hand_labeled_demo_not_real_performance",
+  "training_group_ids": [
+    "training-virtual-env"
+  ],
+  "training_task_sha256": [
+    "1a0b39f5a78ac0ec723cee7eb1ba625c5387d427144cc3d85f6d8362b90ea8f6"
+  ],
+  "cases": [
+    {
+      "case_id": "hold-1",
+      "group_id": "hold-test-env",
+      "task": "別リポジトリの仮想環境が違いpytestが失敗",
+      "expected": "applicable"
+    },
+    {
+      "case_id": "hold-2",
+      "group_id": "hold-test-api",
+      "task": "REST APIのレスポンスJSON仕様が変わった",
+      "expected": "not_applicable"
+    },
+    {
+      "case_id": "hold-3",
+      "group_id": "hold-test-auth",
+      "task": "テスト環境のPythonパスが異なる",
+      "expected": "applicable"
+    },
+    {
+      "case_id": "hold-4",
+      "group_id": "hold-test-db",
+      "task": "SQLのテーブル名が変更された",
+      "expected": "not_applicable"
+    }
+  ]
+}
