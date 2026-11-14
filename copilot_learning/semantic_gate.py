@@ -77,7 +77,11 @@ def verify_semantic_review(candidate: dict[str, Any], task: str,
         raise InvalidData("否定判断の条件または引用が不足しています")
     if normalize_phrase(quote) not in normalize_phrase(task):
         raise InvalidData("引用が元のタスクに存在しません")
-    return {"decision": "not_applicable" if condition in (scope.get("not_when", []) + scope.get("counterexamples", []))
-            else "needs_review",
-            "reason": "semantic_evidence_requires_review", "matched": [condition],
-            "semantic_vote": vote, "quote": quote, "approved_for_copilot": False}
+    # 明示的な除外句が引用自体に含まれる場合のみ「適用外」とする。
+    # 意味的な言い換えはモデルの一票だけでは確定せず、人間レビューに回す。
+    explicit_exclusion = (condition in (scope.get("not_when", []) + scope.get("counterexamples", []))
+                          and normalize_phrase(condition) in normalize_phrase(quote))
+    return {"decision": "not_applicable" if explicit_exclusion else "needs_review",
+            "reason": "explicit_exclusion_quote" if explicit_exclusion else "semantic_evidence_requires_review",
+            "matched": [condition], "semantic_vote": vote, "quote": quote,
+            "approved_for_copilot": False}

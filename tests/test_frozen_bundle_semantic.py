@@ -153,6 +153,12 @@ class SemanticGateTests(unittest.TestCase):
         vote = self._review(task, condition="認証エラー", quote="認証エラー")
         self.assertEqual(verify_semantic_review(self.item, task, vote)["decision"], "not_applicable")
 
+    def test_unrelated_quote_does_not_prove_exclusion(self):
+        # 条件は認証エラーだが引用はPythonのみ。LLMが適用外と言っても未確定。
+        task = "Pythonの仮想環境を確認する"
+        vote = self._review(task, condition="認証エラー", quote="Python")
+        self.assertEqual(verify_semantic_review(self.item, task, vote)["decision"], "needs_review")
+
     def test_invalid_sha_or_fabricated_quote(self):
         for replacement in ({"task_sha256": "0"*64}, {"quote": "本文にない文章"},
                             {"condition": "別のスキルの条件"}):
