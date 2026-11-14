@@ -1,171 +1,63 @@
 # Copilot Self-Learning Platform
 
-> **レビュー修正案 v0.3（未マージ）**: 誤採用を修正し、外部送受信は安全レビュー完了まで一時停止しています。従来の `-Upload` / `--execute` / `--use-bedrock` は実通信しません。以下の旧オンライン手順は現在利用できません。合成データのローカル処理・Dry Runは継続できます。社内IDによる承認、DLP、S3送信経路へのスナップショット統合は未完了です。[対応状況](docs/review-response-20261114.md) を先に確認してください。
+GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・AgentRun型・Hybridで知識を抽出・比較するための**オフラインPoC**です。
 
-GitHub Copilotで行った開発の**セッション情報を後から安全にS3へ蓄積**し、AgentCore MemoryとAgentRun型の学習を比較するためのPoCです。
+> **AWS実送受信・モデル呼出しは停止中です。** `-Upload` / `--execute` / `--use-bedrock` では解除できません。署名検証機能があっても、会社の認証・DLPとの実統合が済んだ意味ではありません。Copilotへの自動インストールも行いません。
 
-**実装済み: ローカル一覧・選別・検査・ZIP化 / AWS CLIによる明示的なS3送信。** AgentCore学習・Hooks・自動Skill反映は未実装です。既存Copilotの動作に変更は加えません。
+## 現在の実装範囲
 
-> **重要**: リポジトリは公開です。セッション履歴には業務の機密情報・ソースコード・個人情報が含まれる可能性があります。**S3送信・Gitコミット前に会社のルールに従って内容を確認し、送信許可を取得してください。** 自動検査は既知のトークン等だけを対象とし、情報漏えいを防ぐ保証はありません。
+| 範囲 | 状態 |
+|---|---|
+| セッション選別・ZIP化・SHA検証・イベント正規化 | 合成データで検証。実Copilotのイベント形式は未検証 |
+| Memory投入計画・送信データ固定・機密語検査・署名承認検証 | オフライン実装。組織の認証と実送信は未接続 |
+| 候補単位の証拠・反証評価、意味レビューの安全側判定 | 実装。実モデルでの精度は未検証 |
+| SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり社内認証ではない |
+| A/B/C/Dの共通・ペア比較と検索評価 | 評価器を実装。実サービスを走らせた比較ではない |
+| Skillプレビューの出力・再検証 | 今回追加。既存のSkills/Instructionsに書き込まない |
+| Copilotへの動的注入・Workflow実行 | 未実装 |
+
+**テスト成功や候補のkeep判定は、学習品質向上・社内運用承認を示しません。**
+本リポジトリは公開です。会話履歴、社内ソース、台帳、タスク、辞書、署名秘密鍵、承認証跡をコミットしないでください。
 
 ## 前提
 
-- Windows + PowerShell 5.1以降（WSL2・Docker不要）
-- Python 3.10以降（標準ライブラリのみ）
-- S3に送信する場合のみ AWS CLI v2 と社内承認済みAWS権限・S3バケット・KMS鍵
-- Copilot CLI / Copilot appで`~/.copilot/session-state/<session-id>/events.jsonl`があること。VS CodeのChat Export形式には未対応
+ローカル処理はPython 3.10以降を想定。署名検証のみ`cryptography`が別途必要です。検証実行はLinux/Python 3.13で、Windows PowerShell・AWS・Copilot実機は未検証です。WSL2/Dockerは初期要件に含めません。CI/GitHub Actionsは使用しません。
 
-## 1. ローカルセッションの一覧
+## AWS・Copilot不要の確認
 
-PowerShellでこのリポジトリのルートから実行します。
-
-```powershell
-python .\scripts\prepare_sessions.py --list
-```
-
-保存先が異なる場合は `--source "C:\path\to\session-state"` を指定できます。
-
-## 2. 終了済みのセッションをローカルに梱包
-
-最初は**個別のセッションを1件選ぶ**ことをおすすめします。ZIPはGit管理外のフォルダへ出力します。
-
-```powershell
-python .\scripts\prepare_sessions.py `
-  --session "<--listで確認したセッションID>" `
-  --out "$env:USERPROFILE\copilot-learning-staging"
-```
-
-すべての終了済みセッションを対象にしたい場合は、`--session` の代わりに `--all` を指定します。最終更新から30分以内のセッションは既定で保留します。各ZIPには `events.jsonl`、任意の `workspace.yaml` と `plan.md` を入れ、別にSHA-256付き `*.manifest.json` を作成します。`checkpoints/` や `files/` は初期版では収集しません。
-
-**出力したZIPを手元で展開し、機密・個人情報が含まれないか目視確認してください。** 判定が難しいデータはS3に送らないでください。
-
-## 3. S3アップロード（既定はDry Run）
-
-社内で承認済みのAWSアカウント・バケット・KMS鍵に置き換えて実行してください。`-Upload` を指定しない限りAWS通信は行いません。
-
-```powershell
-.\scripts\upload_sessions.ps1 `
-  -StagingDirectory "$env:USERPROFILE\copilot-learning-staging" `
-  -Bucket "<承認済みバケット>" `
-  -ExpectedAwsAccountId "<12桁アカウントID>" `
-  -Region "ap-northeast-1" `
-  -KmsKeyId "<承認済みKMSキーARN>" `
-  -Profile "<社内承認済みAWSプロファイル>"
-```
-
-Dry Runの内容、ZIP本体、社内のアップロード可否を確認した**後だけ**、最後に `-Upload -ConfirmApprovedData` を付けて実行します。STSでAWSアカウントIDを検証し、SSE-KMSでS3へ保存します。S3の同一キーへの上書きは禁止します。
-
-```powershell
-# 事前確認・社内承認済みの場合に限り、上記のコマンド末尾へ追加
--Upload -ConfirmApprovedData
-```
-
-**AWS上での実動作は未検証**です。初回は合成データ1件だけで動作確認してください。
-
-## 4. ローカルテスト
-
-```powershell
-python -m unittest discover -s tests -v
-```
-
-CI / GitHub Actionsは使いません。
-
-## 今後の拡張
-
-S3に同じ入力を保存した後、AgentCore Memory標準（A）、AgentRun型カスタム（B）、ハイブリッド（C）を別々に動かして比較します。人間のフィードバックは `examples/feedback.example.json` をベースに `session_fingerprint` と紐づけます。
-
-詳細な構成と受入条件は [docs/architecture.md](docs/architecture.md) を参照してください。
-
-## Phase 1：AWSもCopilotも使わないオフライン実装（Draft）
-
-**実装済み**: SHA・ZIPの再検証、イベントの安全側の正規化、AgentCore Memory `CreateEvent`投入計画の生成、AgentRun型の候補抽出・独立Graderのアダプター、Memory結果のハイブリッド判定、フィードバックのローカル保存・S3送信アダプター、合成データでの自動テスト。
-
-**未検証/未実装**: Copilot実機の`events.jsonl`詳細形式への対応、AWS CLI・IAM・KMSの実接続、Episodic Reflectionの完了待機や品質評価、AgentCore Runtimeへのデプロイ、実タスクの成功率改善、CopilotへのSkills自動反映。**学習品質が実測で改善したとはまだ言えません。**
-
-### 1. 合成データでの完全オフラインテスト
+リポジトリのルートから実行します。デモ出力先は**Git管理外の新規フォルダ**にしてください。
 
 ```powershell
 python -m unittest discover -s tests -v
 python .\scripts\demo_offline.py --out "$env:USERPROFILE\copilot-learning-demo-01"
+python .\scripts\demo_skill_preview.py --out "$env:USERPROFILE\copilot-skill-preview-demo-01"
 ```
 
-`results/` に `normalized_session.json`、`memory_create_event_plan.json`、`agentrun_candidate_grades.json`、`comparison_report.json` ができます。Aは `not_executed` と表示されます。デモのB候補は**手作りの合成候補**であり、LLMが学習して作成した結果ではありません。
+デモは人手で作った合成入力です。実サービスの学習・実行結果ではありません。
 
-### 2. 実Copilotセッションのオフライン準備
+## Issue #11：Skillプレビュー
+
+知識IDと期待revisionを明示し、activeかつkeepのNote/Skillだけを対象にします。適用外・保留・退役・古い版・機密検出は拒否します。台帳はSQLiteの読取専用接続で参照します。
+
+出力は`SKILL.preview.md`と`manifest.json`だけです。`SKILL.md`へ自動改名せず、Copilotの自動読込先にも配置しません。確認時にはハッシュと現在の台帳状態を再照合します。Markdownだけで実Copilotの権限を制御できるわけではありません。
+
+[使い方・export/verify・制約](docs/skill-preview-20261115.md)
+
+## セッションのローカル準備
 
 ```powershell
 python .\scripts\prepare_sessions.py --list
-python .\scripts\prepare_sessions.py --session "<ID>" --out "$env:USERPROFILE\copilot-learning-staging"
+python .\scripts\prepare_sessions.py --session "<確認したID>" --out "$env:USERPROFILE\copilot-learning-staging"
 ```
 
-`session-<SHA256>.zip` と `session-<SHA256>.manifest.json` を確認し、内容を人手でレビューしてください。`--all` での一括収集は、初回では避けてください。
+既定では`~/.copilot/session-state/<session-id>/events.jsonl`を想定。保存形式・終了状態は会社PCで確認が必要です。最終更新からの経過時間だけでは終了を厳密に保証できません。ZIPは既知パターン検査のみで、会社の機密情報・個人情報が完全に除去される保証はありません。
 
-### 3. 学習処理のオフライン計画（外部通信なし）
+## 設計・検証資料
 
-```powershell
-python .\scripts\run_learning_poc.py `
-  --staging "$env:USERPROFILE\copilot-learning-staging" `
-  --fingerprint "<64桁のSHA256>" `
-  --out "$env:USERPROFILE\copilot-learning-analysis-01" `
-  --memory-id "REPLACE_WITH_REAL_MEMORY_ID"
-```
+- [全体構成](docs/architecture.md) / [オフライン学習処理](docs/offline-pipeline.md) / [AgentRunとの詳細比較](docs/agentrun-process-comparison-20261115.md)
+- [レビュー修正](docs/review-response-20261114.md) / [知識台帳・検索](docs/offline-improvements-20261115.md)
+- [送信前検証・共通評価](docs/preflight-eval-hardening-20261115.md) / [検索品質評価](docs/retrieval-evals-20261115.md)
+- [確定バンドル・意味レビュー](docs/frozen-bundle-and-semantic-gate-20261115.md) / [機密検査・適用範囲評価](docs/privacy-semantic-holdout-20261115.md)
+- [署名検証・ペア比較](docs/offline-attestation-paired-eval-20261115.md) / [Skillプレビュー](docs/skill-preview-20261115.md)
 
-正規化は **`type=message` / `type=conversation_message` かつ `role=user/assistant/tool` で、本文が文字列のイベントに限定**しています。GitHubは`events.jsonl`の存在を公開していますが、ここで用いる細かなスキーマは実機未検証です。認識できないイベントは破棄・集計し、推測で本文を作りません。0件ならAgentCoreへの投入計画は空になります。
-
-候補JSONを指定したオフラインGrade検証には `--candidates <JSON>` を使用します。AWS接続後は `--use-bedrock --model-id ... --expected-account-id ... --approval-file ... --confirm-approved-data` による実モデル生成を利用できます。モデル生成は AWS Bedrock Converse への外部送信です。承認なしでは実行できません。
-
-### 4. 目視レビューの結果を登録し、S3へ送る（承認後だけ）
-
-ローカル梱包時に本人が社内規程・送信先を照合します。承認証跡は指定したZIP・manifestのハッシュ、AWSアカウント、S3バケットに紐づきます。
-
-```powershell
-python .\scripts\review_session.py `
-  --staging "$env:USERPROFILE\copilot-learning-staging" `
-  --fingerprint "<SHA256>" --reviewer "<担当者識別子>" `
-  --classification approved_non_sensitive --account-id "<12桁ID>" `
-  --bucket "<承認済みバケット>" --approve --confirm-internal-policy
-```
-
-`upload_sessions.ps1` は新たに `*.approval.json` の存在と対象ハッシュ・送信先を検査します。実送信は `-Upload -ConfirmApprovedData` が必要です。**これらの確認フラグは社内のデータ取扱い承認そのものを保証しません。**
-
-フィードバック登録は次のとおりです。実際に成功を確認したときだけ `verified_success` を使ってください。
-
-```powershell
-python .\scripts\add_feedback.py --staging "$env:USERPROFILE\copilot-learning-staging" `
-  --fingerprint "<SHA256>" --out "$env:USERPROFILE\copilot-learning-feedback" `
-  --outcome verified_success --lesson "環境を確認してからテスト" `
-  --evidence "テスト12件PASS" --classification approved_non_sensitive
-```
-
-S3へ保存する場合は `scripts/upload_feedback.py` でレビュー済みのJSONを指定します（既定はDry Run、実送信は `--execute --confirm-feedback-reviewed` が必要）。
-
-### 5. AWS環境を用意した後（コードは準備済み、実接続は未検証）
-
-`run_learning_poc.py` が生成した `memory_create_event_plan.json` から、実在のMemory IDに対し `scripts/agentcore_memory_cli.py send` を明示的に実行します。STSでAWSアカウント照合後、冪等化トークン付き `CreateEvent` を順次投入。Episodicの反映は**非同期**です。
-
-生成完了後、Memoryのnamespaceを指定して `scripts/agentcore_memory_cli.py export` でレコードを取得し、`run_learning_poc.py --memory-records <JSON>` でハイブリッド評価します。Memoryレコードに元イベントの根拠IDがない場合、採用せず `pending` として記録します。
-
-### セキュリティと限界
-
-- 本リポジトリは**公開**。ZIP、manifest、承認記録、Memory投入計画、フィードバック本体、候補の詳細、AWS資格情報をコミットしないでください。
-- スキャンは既知の秘密パターンだけです。社内ソースコードや個人情報の流出防止は保証しません。社内の承認済み情報に限定してください。
-- `keep` は**品質ゲートの判定**であり、Copilotに自動適用したことも、性能改善が実証できたことも意味しません。
-- AWS CLI / Bedrock用の権限・リソース作成・料金・Windows PowerShell動作は未検証です。AWSやGitHub ActionsでのCIは構成しません。
-
-詳細は [docs/offline-pipeline.md](docs/offline-pipeline.md) を参照。
-
-
-## 追加改善：オフライン確定バンドルと意味レビューゲート（Issue #6/#7）
-
-[実装範囲・安全制約・コマンド](docs/frozen-bundle-and-semantic-gate-20261115.md) を参照してください。
-**AWSへの実送受信は継続停止中**。確定バンドルは社内の署名承認・DLP・暗号化を代替しません。
-
-
-## Offline privacy precheck / semantic scope holdout (2026-11-15)
-
-[送信前の機密・PIIスキャン、独立スコープ評価の詳細](docs/privacy-semantic-holdout-20261115.md)を参照してください。これらは**オフラインのみ**で、社内正式承認・DLP・AWS送受信やCopilotへのSkills反映を行いません。
-
-
-## オフライン署名検証とA/B/C/Dペア評価（Issue #6/#10, 2026-11-15）
-
-[署名付きスコープ検証・比較実験手順](docs/offline-attestation-paired-eval-20261115.md)。`cryptography` は署名検証時だけ必要。検証結果が成功しても社内承認とはみなさず、AWS実送受信は引き続き停止。
+古い設計文書にあるオンライン手順は現時点では利用できません。会社の正式承認・送信経路の独立検収・実環境試験の完了後に、別変更として再開判断します。Issue #6〜#11は残課題を維持しています。
