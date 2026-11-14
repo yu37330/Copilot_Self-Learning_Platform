@@ -159,3 +159,8 @@ S3へ保存する場合は `scripts/upload_feedback.py` でレビュー済みの
 
 [実装範囲・安全制約・コマンド](docs/frozen-bundle-and-semantic-gate-20261115.md) を参照してください。
 **AWSへの実送受信は継続停止中**。確定バンドルは社内の署名承認・DLP・暗号化を代替しません。
+
+
+## Offline privacy precheck / semantic scope holdout (2026-11-15)
+
+[送信前の機密・PIIスキャン、独立スコープ評価の詳細](docs/privacy-semantic-holdout-20261115.md)を参照してください。これらは**オフラインのみ**で、社内正式承認・DLP・AWS送受信やCopilotへのSkills反映を行いません。

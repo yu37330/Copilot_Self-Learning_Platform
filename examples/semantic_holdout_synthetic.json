@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0",
+  "label_source": "synthetic",
+  "training_group_ids": [
+    "train-group"
+  ],
+  "training_task_sha256": [],
+  "cases": [
+    {
+      "case_id": "positive",
+      "group_id": "holdout-p",
+      "task": "Python 仮想環境のテスト",
+      "expected": "applicable",
+      "candidate": {
+        "knowledge_type": "skill",
+        "title": "Python環境確認",
+        "description": "テスト環境の切り分け",
+        "instruction": "Pythonの仮想環境をテスト前に確認",
+        "generalization": "環境不一致に適用",
+        "evidence_ids": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:0"
+        ],
+        "applies_when": [
+          "Python",
+          "仮想環境"
+        ],
+        "not_when": [
+          "API仕様不一致"
+        ],
+        "counterexamples": [
+          "認証エラー"
+        ]
+      },
+      "review": {
+        "candidate_sha256": "70e671ab26700a4b0f17b44d37a5dda5c68e53bf34c5a964d490b9db77b8998c",
+        "task_sha256": "9d50f93f29661974559d37420af75d20cc942e5d40f9b9a49c5467450e00fbd8",
+        "verdict": "applicable",
+        "condition": "",
+        "quote": "",
+        "reason": "合成入力によるレビュー"
+      }
+    },
+    {
+      "case_id": "negative-literal",
+      "group_id": "holdout-n",
+      "task": "Python 仮想環境 API仕様不一致",
+      "expected": "not_applicable",
+      "candidate": {
+        "knowledge_type": "skill",
+        "title": "Python環境確認",
+        "description": "テスト環境の切り分け",
+        "instruction": "Pythonの仮想環境をテスト前に確認",
+        "generalization": "環境不一致に適用",
+        "evidence_ids": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:0"
+        ],
+        "applies_when": [
+          "Python",
+          "仮想環境"
+        ],
+        "not_when": [
+          "API仕様不一致"
+        ],
+        "counterexamples": [
+          "認証エラー"
+        ]
+      },
+      "review": {
+        "candidate_sha256": "70e671ab26700a4b0f17b44d37a5dda5c68e53bf34c5a964d490b9db77b8998c",
+        "task_sha256": "1026a374fa010e7beded4219084fbf18dad0d32eb747284bafdda2b8dab5da5f",
+        "verdict": "not_applicable",
+        "condition": "API仕様不一致",
+        "quote": "API仕様不一致",
+        "reason": "合成入力によるレビュー"
+      }
+    },
+    {
+      "case_id": "negative-implicit",
+      "group_id": "holdout-i",
+      "task": "Python 仮想環境は正常だがテスト失敗",
+      "expected": "not_applicable",
+      "candidate": {
+        "knowledge_type": "skill",
+        "title": "Python環境確認",
+        "description": "テスト環境の切り分け",
+        "instruction": "Pythonの仮想環境をテスト前に確認",
+        "generalization": "環境不一致に適用",
+        "evidence_ids": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:0"
+        ],
+        "applies_when": [
+          "Python",
+          "仮想環境"
+        ],
+        "not_when": [
+          "API仕様不一致"
+        ],
+        "counterexamples": [
+          "認証エラー"
+        ]
+      },
+      "review": {
+        "candidate_sha256": "70e671ab26700a4b0f17b44d37a5dda5c68e53bf34c5a964d490b9db77b8998c",
+        "task_sha256": "ccab00006ca0c5f6fee59923e80819d0de7fb6a05ad1fae6b6f6a0e8d0282c80",
+        "verdict": "not_applicable",
+        "condition": "仮想環境",
+        "quote": "仮想環境は正常",
+        "reason": "合成入力によるレビュー"
+      }
+    },
+    {
+      "case_id": "unknown",
+      "group_id": "holdout-u",
+      "task": "Pythonのテストで失敗",
+      "expected": "applicable",
+      "candidate": {
+        "knowledge_type": "skill",
+        "title": "Python環境確認",
+        "description": "テスト環境の切り分け",
+        "instruction": "Pythonの仮想環境をテスト前に確認",
+        "generalization": "環境不一致に適用",
+        "evidence_ids": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:0"
+        ],
+        "applies_when": [
+          "Python",
+          "仮想環境"
+        ],
+        "not_when": [
+          "API仕様不一致"
+        ],
+        "counterexamples": [
+          "認証エラー"
+        ]
+      }
+    }
+  ]
+}
