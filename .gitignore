@@ -14,3 +14,14 @@ raw-sessions/
 __pycache__/
 .pytest_cache/
 *.pyc
+
+# 後工程の原データ・承認記録・知識候補（Git管理外）
+*.approval.json
+*memory_create_event_plan.json
+*normalized_session.json
+*agentrun_candidate_grades.json
+*hybrid_candidate_grades.json
+*comparison_report.json
+*memory_records.json
+
+feedback-*.json
