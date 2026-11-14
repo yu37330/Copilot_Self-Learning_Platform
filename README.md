@@ -1,5 +1,7 @@
 # Copilot Self-Learning Platform
 
+> **レビュー修正案 v0.3（未マージ）**: 誤採用を修正し、外部送受信は安全レビュー完了まで一時停止しています。従来の `-Upload` / `--execute` / `--use-bedrock` は実通信しません。以下の旧オンライン手順は現在利用できません。合成データのローカル処理・Dry Runは継続できます。社内IDによる承認、DLP、S3送信経路へのスナップショット統合は未完了です。[対応状況](docs/review-response-20261114.md) を先に確認してください。
+
 GitHub Copilotで行った開発の**セッション情報を後から安全にS3へ蓄積**し、AgentCore MemoryとAgentRun型の学習を比較するためのPoCです。
 
 **実装済み: ローカル一覧・選別・検査・ZIP化 / AWS CLIによる明示的なS3送信。** AgentCore学習・Hooks・自動Skill反映は未実装です。既存Copilotの動作に変更は加えません。

@@ -15,6 +15,8 @@ from copilot_learning.learning import (BedrockConverseProvider, generate_candida
                                        memory_records_as_candidates, validate_candidates)
 from copilot_learning.aws_bridge import assert_account, validate_approval
 
+from copilot_learning.review_safety import require_online_release
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -46,7 +48,7 @@ def process(staging: Path, fingerprint: str, out_dir: Path, memory_id: str,
         if not session["messages"]:
             raise InvalidData("認識できるイベントがなく、モデルに入力できません")
         b_graded = grade_candidates(generate_candidates(provider, session, feedback), session, feedback)
-        b_graded = independent_llm_grade(provider, b_graded)
+        b_graded = independent_llm_grade(provider, b_graded, session, feedback)
     elif candidate_file is not None:
         proposals = json.loads(candidate_file.read_text("utf-8"))
         b_graded = grade_candidates(validate_candidates(proposals), session, feedback)
@@ -93,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         provider = None
         if args.use_bedrock:
+            require_online_release()
             if not (args.confirm_approved_data and args.approval_file and args.expected_account_id and args.model_id):
                 raise InvalidData("外部モデル送信には承認記録・AWSアカウント・モデルID・明示的な確認が必須です")
             manifest, _ = read_archive(args.staging, args.fingerprint)

@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
             "target_account_id": args.account_id, "target_bucket": args.bucket,
             "reviewer": args.reviewer, "data_classification": args.classification,
             "reviewed_at_utc": datetime.now(timezone.utc).isoformat(),
-            "review_scope": "S3 storage and optional approved Bedrock/AgentCore learning",
+            "review_scope": "local acknowledgement only; not an organization-authenticated execution authorization",
         }
         if not (args.approve and args.confirm_internal_policy):
             print(f"DRY RUN: {len(events)}イベント。セッションデータを手作業で確認し、社内許可後に両フラグを指定してください。")
@@ -50,7 +50,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             validate_approval(tmp, args.fingerprint, manifest["archive_sha256"], args.account_id,
                               bucket=args.bucket, manifest_sha256=approval["manifest_sha256"])
-            tmp.rename(dest)  # 上書き前に存在を確認する
+            # renameはOSにより上書きするため、排他的な新規作成に統一する。
+            with dest.open("xb") as out:
+                out.write(tmp.read_bytes())
+            tmp.unlink()
         except Exception:
             tmp.unlink(missing_ok=True)
             raise
