@@ -1,6 +1,6 @@
 # Copilot Self-Learning Platform
 
-> **レビュー修正版 v0.3（PR #4でmain反映済み）**: 誤採用を修正し、外部送受信は安全レビュー完了まで一時停止しています。従来の `-Upload` / `--execute` / `--use-bedrock` は実通信しません。以下の旧オンライン手順は現在利用できません。合成データのローカル処理・Dry Runは継続できます。社内IDによる承認、DLP、S3送信経路へのスナップショット統合は未完了です。[対応状況](docs/review-response-20261114.md) を先に確認してください。
+> **レビュー修正案 v0.3（未マージ）**: 誤採用を修正し、外部送受信は安全レビュー完了まで一時停止しています。従来の `-Upload` / `--execute` / `--use-bedrock` は実通信しません。以下の旧オンライン手順は現在利用できません。合成データのローカル処理・Dry Runは継続できます。社内IDによる承認、DLP、S3送信経路へのスナップショット統合は未完了です。[対応状況](docs/review-response-20261114.md) を先に確認してください。
 
 GitHub Copilotで行った開発の**セッション情報を後から安全にS3へ蓄積**し、AgentCore MemoryとAgentRun型の学習を比較するためのPoCです。
 
@@ -155,6 +155,7 @@ S3へ保存する場合は `scripts/upload_feedback.py` でレビュー済みの
 詳細は [docs/offline-pipeline.md](docs/offline-pipeline.md) を参照。
 
 
-## AgentRunとの詳細比較（2026-11-15）
+## 追加改善：オフライン確定バンドルと意味レビューゲート（Issue #6/#7）
 
-[処理フロー・関数対応・未実装機能・評価計画](docs/agentrun-process-comparison-20261115.md) を参照してください。
+[実装範囲・安全制約・コマンド](docs/frozen-bundle-and-semantic-gate-20261115.md) を参照してください。
+**AWSへの実送受信は継続停止中**。確定バンドルは社内の署名承認・DLP・暗号化を代替しません。
