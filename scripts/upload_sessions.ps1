@@ -68,9 +68,31 @@ foreach ($manifestFile in $manifests) {
     if ($actualSha256 -ne $manifest.archive_sha256) {
         throw "ZIPのSHA-256不一致: $expectedName"
     }
+    # チェックボックスだけでなく、送信先とハッシュに紐づく承認記録を要求する。
+    # これは社内の実際の情報管理承認そのものを代替するものではない。
+    $approvalPath = Join-Path $StagingDirectory "session-$($manifest.session_fingerprint).approval.json"
+    if (-not (Test-Path -LiteralPath $approvalPath -PathType Leaf)) {
+        throw "承認記録がありません: $($manifest.session_fingerprint)"
+    }
+    $approval = Get-Content -LiteralPath $approvalPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifestSha = (Get-FileHash -LiteralPath $manifestFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($approval.schema_version -ne '1.0' -or
+        $approval.record_type -ne 'upload-approval' -or
+        $approval.status -ne 'approved' -or
+        $approval.session_fingerprint -ne $manifest.session_fingerprint -or
+        $approval.archive_sha256 -ne $actualSha256 -or
+        $approval.manifest_sha256 -ne $manifestSha -or
+        $approval.target_account_id -ne $ExpectedAwsAccountId -or
+        $approval.target_bucket -ne $Bucket -or
+        [string]::IsNullOrWhiteSpace([string]$approval.reviewer) -or
+        [string]::IsNullOrWhiteSpace([string]$approval.reviewed_at_utc) -or
+        $approval.data_classification -notin @('synthetic', 'approved_non_sensitive')) {
+        throw "承認内容・対象ハッシュ・送信先が不一致: $($manifestFile.Name)"
+    }
     $packages += [PSCustomObject]@{
         ArchivePath  = (Resolve-Path -LiteralPath $archivePath).Path
         ManifestPath = $manifestFile.FullName
+        ApprovalPath = $approvalPath
         Fingerprint  = [string]$manifest.session_fingerprint
         ArchiveHash  = $actualSha256
     }
@@ -136,5 +158,7 @@ foreach ($package in $packages) {
     Send-ObjectIfMissing -SourcePath $package.ArchivePath -Key "$keyBase/session.zip" -ExpectedHash $package.ArchiveHash
     $manifestHash = (Get-FileHash -LiteralPath $package.ManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Send-ObjectIfMissing -SourcePath $package.ManifestPath -Key "$keyBase/manifest.json" -ExpectedHash $manifestHash
+    $approvalHash = (Get-FileHash -LiteralPath $package.ApprovalPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    Send-ObjectIfMissing -SourcePath $package.ApprovalPath -Key "$keyBase/approval.json" -ExpectedHash $approvalHash
 }
 Write-Host "アップロード処理完了: $($packages.Count)件（Memoryへの投入は行っていません）。"
