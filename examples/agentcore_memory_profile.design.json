@@ -1,11 +1,15 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "record_type": "agentcore-memory-design-not-api-request",
   "status": "proposal_not_deployed",
   "external_transfer_authorized": false,
   "region": "company_approved_region_to_be_verified",
   "isolation": {
-    "resource_per": ["project", "experiment_variant", "environment"],
+    "resource_per": [
+      "project",
+      "experiment_variant",
+      "environment"
+    ],
     "actor_id": "stable_pseudonymous_developer_id",
     "session_id": "one_logical_development_task"
   },
@@ -18,10 +22,10 @@
   },
   "candidate_profile": {
     "episodic": true,
-    "episodic_prompt_overrides": "compare_after_native_baseline",
-    "semantic": "optional_for_user_confirmed_environment_and_project_facts",
-    "summary": "optional_for_long_session_resumption",
-    "user_preference": "off_until_personalization_is_needed"
+    "episodic_prompt_overrides": "prepare_now_as_separate_variant_A1",
+    "semantic": "prepare_S_A2_A5_now",
+    "summary": "prepare_Q_A3_A5_now",
+    "user_preference": "prepare_U_A4_A5_now"
   },
   "proposed_retention": {
     "eventExpiryDuration": 30,
@@ -36,14 +40,30 @@
     "semantic": "/facts/{memoryStrategyId}/actor/{actorId}/"
   },
   "retrieval_proposal": {
-    "topK_reflections": 3,
-    "topK_episodes": 3,
-    "topK_semantic": 2,
     "filter_by_strategy": true,
     "namespace_must_be_derived_by_trusted_application": true,
     "use_metadata_only_after_verified_schema": true,
-    "default_namespace_root_forbidden_by_design": true
+    "default_namespace_root_forbidden_by_design": true,
+    "topK_selected_total": 6,
+    "retrieved_context_budget_tokens": 2000,
+    "budget_scope": "combined_context_across_all_enabled_strategies"
   },
-  "required_input": ["task", "observed_actions", "tool_results", "test_results", "user_corrections", "success_failure_unknown"],
-  "non_goals": ["model_weight_training", "copilot_auto_install", "workflow_execution", "automatic_transfer_authorization"]
+  "required_input": [
+    "task",
+    "observed_actions",
+    "tool_results",
+    "test_results",
+    "user_corrections",
+    "success_failure_unknown"
+  ],
+  "non_goals": [
+    "model_weight_training",
+    "copilot_auto_install",
+    "workflow_execution",
+    "automatic_transfer_authorization"
+  ],
+  "preparation_policy": "prepare_all_variants_up_front_execute_in_controlled_order",
+  "suite_generator": "scripts/prepare_experiment_suite.py",
+  "suite_reference": "docs/full-experiment-suite-20261115.md",
+  "scope_note": "このJSONは設計方針。全構成の準備と全構成の実行完了は異なる。AWS I/O停止を維持。"
 }

@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "label_source": "synthetic",
+  "training_group_ids": [
+    "training-series-1"
+  ],
+  "training_task_sha256": [],
+  "cases": [
+    {
+      "case_id": "environment",
+      "family": "troubleshooting",
+      "group_id": "heldout-environment",
+      "task": "合成の環境不一致を、記録したPython実行環境の比較手順で調査する。",
+      "expected": "applicable"
+    },
+    {
+      "case_id": "api-scope",
+      "family": "negative_scope",
+      "group_id": "heldout-api-scope",
+      "task": "環境は正常で、API仕様だけが変更された。仮想環境変更の手順を使わない。",
+      "expected": "not_applicable"
+    },
+    {
+      "case_id": "project-version",
+      "family": "project_facts",
+      "group_id": "heldout-project-version",
+      "task": "ユーザーが確認した合成プロジェクトのランタイム版を参照する。",
+      "expected": "applicable"
+    },
+    {
+      "case_id": "resume",
+      "family": "session_resumption",
+      "group_id": "heldout-resume",
+      "task": "合成の中断セッションの確認済み作業と未完了作業を区別して再開する。",
+      "expected": "applicable"
+    },
+    {
+      "case_id": "style",
+      "family": "preferences",
+      "group_id": "heldout-style",
+      "task": "合成ユーザーの明示した日本語コメントの希望を参照する。",
+      "expected": "applicable"
+    },
+    {
+      "case_id": "different-user",
+      "family": "negative_scope",
+      "group_id": "heldout-different-user",
+      "task": "別ユーザーの希望を現在のユーザーに適用しない。",
+      "expected": "not_applicable"
+    }
+  ]
+}
