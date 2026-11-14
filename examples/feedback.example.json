@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "record_type": "human-feedback",
+  "session_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "feedback_id": "example-001",
+  "created_at_utc": "2026-11-14T00:00:00Z",
+  "outcome": "verified_success",
+  "rating": 4,
+  "reusable_lesson": "テストの前にPythonの実行環境を確認する",
+  "evidence": "テスト12件成功を確認",
+  "data_classification": "synthetic_example"
+}

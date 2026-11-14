@@ -1,0 +1,16 @@
+# 機密セッションデータの誤コミット防止
+staging/
+exports/
+raw-sessions/
+*.zip
+*.manifest.json
+*.session.jsonl
+*.session.yaml
+.env
+.env.*
+!.env.example
+.aws/
+.copilot/
+__pycache__/
+.pytest_cache/
+*.pyc
