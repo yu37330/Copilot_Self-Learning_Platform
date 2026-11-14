@@ -1,0 +1,147 @@
+{
+  "arms": {
+    "A": {
+      "cases": {
+        "c1": {
+          "cost_usd": null,
+          "prediction": "applicable",
+          "run_id": "synthetic-A-0",
+          "trace_sha256": "93034df951b3219250e93797abefff55b8e271ab10e0a9324b6ca5ac0e4dbd1f"
+        },
+        "c2": {
+          "cost_usd": null,
+          "prediction": "not_applicable",
+          "run_id": "synthetic-A-1",
+          "trace_sha256": "2eb7cf4ffb10d0af45915f89cc2778a8f414b0646013b4b04a901e8ed774bb97"
+        },
+        "c3": {
+          "cost_usd": null,
+          "prediction": "applicable",
+          "run_id": "synthetic-A-2",
+          "trace_sha256": "08df613076da326be40c2152aee894a0f56d8d5e1582124e8693588fcc1e60be"
+        },
+        "c4": {
+          "cost_usd": null,
+          "prediction": "not_applicable",
+          "run_id": "synthetic-A-3",
+          "trace_sha256": "6f68d3d3ca3b6c3cdd0a3a3567f9c72678d5b7c2ab74ad03c732a314ed1aad37"
+        }
+      },
+      "knowledge_revision_sha256": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd",
+      "profile": {
+        "budget_tokens": 1024,
+        "model_id": "synthetic-model",
+        "tool_policy": "read-only"
+      },
+      "source_kind": "synthetic"
+    },
+    "B": {
+      "cases": {
+        "c1": {
+          "cost_usd": null,
+          "prediction": "applicable",
+          "run_id": "synthetic-B-0",
+          "trace_sha256": "80f42d80a51410c2d5c3627c99ea8e4afd91a94105c8625ca18354746e2ad70f"
+        },
+        "c2": {
+          "cost_usd": null,
+          "prediction": "applicable",
+          "run_id": "synthetic-B-1",
+          "trace_sha256": "8f5052531eb733839afd78eadefe0ffaf1d78425ab3698e1f0f391a0f0f28638"
+        },
+        "c3": {
+          "cost_usd": null,
+          "prediction": "applicable",
+          "run_id": "synthetic-B-2",
+          "trace_sha256": "f26ba2be7a54aee7f579edecb380f16829d7510e2f7bf16d8be4a1ce73ab5be7"
+        },
+        "c4": {
+          "cost_usd": null,
+          "prediction": "not_applicable",
+          "run_id": "synthetic-B-3",
+          "trace_sha256": "ac51f23066b8a1c8cdd91be35dc58a5fcc77f0e9582e19a648efdb727e020151"
+        }
+      },
+      "knowledge_revision_sha256": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+      "profile": {
+        "budget_tokens": 1024,
+        "model_id": "synthetic-model",
+        "tool_policy": "read-only"
+      },
+      "source_kind": "synthetic"
+    },
+    "C": {
+      "cases": {
+        "c1": {
+          "cost_usd": null,
+          "prediction": "applicable",
+          "run_id": "synthetic-C-0",
+          "trace_sha256": "18efb2ec4875eb6c245e71d65ae614b3be713cfb3f16a52fdd1a354c2ee256b4"
+        },
+        "c2": {
+          "cost_usd": null,
+          "prediction": "not_applicable",
+          "run_id": "synthetic-C-1",
+          "trace_sha256": "271093d4175c74b73b18d85a70da3ff32d8e9e638182271b168436231dafb1e9"
+        },
+        "c3": {
+          "cost_usd": null,
+          "prediction": "needs_review",
+          "run_id": "synthetic-C-2",
+          "trace_sha256": "cc6d4272449e3e10a4e77929fd229d958ebd2ad61e4003a613692621f57003e0"
+        },
+        "c4": {
+          "cost_usd": null,
+          "prediction": "not_applicable",
+          "run_id": "synthetic-C-3",
+          "trace_sha256": "23e2c9fc18885c64cdaead934872f1b7a5f77b95fc8a83e1907a88d764f1df46"
+        }
+      },
+      "knowledge_revision_sha256": "6b23c0d5f35d1b11f9b683f0b0a617355deb11277d91ae091d399c655b87940d",
+      "profile": {
+        "budget_tokens": 1024,
+        "model_id": "synthetic-model",
+        "tool_policy": "read-only"
+      },
+      "source_kind": "synthetic"
+    },
+    "D": {
+      "cases": {
+        "c1": {
+          "cost_usd": null,
+          "prediction": "needs_review",
+          "run_id": "synthetic-D-0",
+          "trace_sha256": "c75b319f364b7716ae71978e9ed592d003ea2f7bc816f79223913d760e2968e3"
+        },
+        "c2": {
+          "cost_usd": null,
+          "prediction": "not_applicable",
+          "run_id": "synthetic-D-1",
+          "trace_sha256": "3cb444d5527543a6b14b666fbb283b79272dcccecceced260254bf06393a0e2e"
+        },
+        "c3": {
+          "cost_usd": null,
+          "prediction": "needs_review",
+          "run_id": "synthetic-D-2",
+          "trace_sha256": "cb024330b1290f408466acb5f8d5d5aa0fe73a95fdf3ac45ec7ef72c52cb32aa"
+        },
+        "c4": {
+          "cost_usd": null,
+          "prediction": "not_applicable",
+          "run_id": "synthetic-D-3",
+          "trace_sha256": "c970590855246ebb7f8029b7ec7153ed94b1d9cd28ea92c832fe51f9c1f21db0"
+        }
+      },
+      "knowledge_revision_sha256": null,
+      "profile": {
+        "budget_tokens": 1024,
+        "model_id": "synthetic-model",
+        "tool_policy": "read-only"
+      },
+      "source_kind": "synthetic"
+    }
+  },
+  "dataset_sha256": "9db0efd1a042e7a2470fcc0a0207e68b5f4a69923b2a0fe783889c5efe1df86f",
+  "record_type": "offline-paired-observations",
+  "schema_version": "1.0"
+}

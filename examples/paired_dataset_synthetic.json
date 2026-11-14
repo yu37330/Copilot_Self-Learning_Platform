@@ -1,0 +1,33 @@
+{
+  "cases": [
+    {
+      "case_id": "c1",
+      "expected": "applicable",
+      "group_id": "heldout-A",
+      "task": "Python仮想環境が一致しないテスト"
+    },
+    {
+      "case_id": "c2",
+      "expected": "not_applicable",
+      "group_id": "heldout-B",
+      "task": "API仕様の不一致が原因のエラー"
+    },
+    {
+      "case_id": "c3",
+      "expected": "applicable",
+      "group_id": "heldout-C",
+      "task": "別プロジェクトのPython環境相違"
+    },
+    {
+      "case_id": "c4",
+      "expected": "not_applicable",
+      "group_id": "heldout-D",
+      "task": "認証サーバーの仕様変更"
+    }
+  ],
+  "label_source": "synthetic",
+  "training_group_ids": [
+    "training-series-X"
+  ],
+  "training_task_sha256": []
+}

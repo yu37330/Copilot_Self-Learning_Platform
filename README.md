@@ -164,3 +164,8 @@ S3へ保存する場合は `scripts/upload_feedback.py` でレビュー済みの
 ## Offline privacy precheck / semantic scope holdout (2026-11-15)
 
 [送信前の機密・PIIスキャン、独立スコープ評価の詳細](docs/privacy-semantic-holdout-20261115.md)を参照してください。これらは**オフラインのみ**で、社内正式承認・DLP・AWS送受信やCopilotへのSkills反映を行いません。
+
+
+## オフライン署名検証とA/B/C/Dペア評価（Issue #6/#10, 2026-11-15）
+
+[署名付きスコープ検証・比較実験手順](docs/offline-attestation-paired-eval-20261115.md)。`cryptography` は署名検証時だけ必要。検証結果が成功しても社内承認とはみなさず、AWS実送受信は引き続き停止。
