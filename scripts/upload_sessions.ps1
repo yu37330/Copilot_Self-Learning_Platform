@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
   レビュー済みのCopilotセッションZIPを、明示的な許可がある場合だけS3へ保存する。
@@ -21,6 +21,12 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# 社内ID・署名承認・DLP・送信バイト列固定の接続が完成するまでは、実送信を止める。
+# Dry Runは継続できる。フラグでこの安全停止を解除する経路は設けない。
+if ($Upload) {
+    throw '外部実行は安全レビュー完了まで停止中です。合成データのDry Runのみ利用してください。'
+}
 
 if ($ExpectedAwsAccountId -notmatch '^\d{12}$') {
     throw 'ExpectedAwsAccountId は12桁のAWSアカウントIDを指定してください。'

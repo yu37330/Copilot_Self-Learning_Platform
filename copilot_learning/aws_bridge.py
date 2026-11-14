@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .core import InvalidData, SHA_PATTERN, digest
+from .review_safety import require_online_release
 
 AWS_ACCOUNT_RE = re.compile(r"^[0-9]{12}$")
 
@@ -43,6 +44,7 @@ def validate_approval(approval_path: Path, fingerprint: str, archive_sha256: str
 
 
 def aws_command(args: list[str], *, region: str, profile: str = "") -> dict[str, Any]:
+    require_online_release()
     if shutil.which("aws") is None:
         raise RuntimeError("AWS CLI v2が見つかりません")
     cmd = ["aws", *args, "--region", region, "--no-cli-pager", "--output", "json"]

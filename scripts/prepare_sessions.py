@@ -12,6 +12,9 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from copilot_learning.core import content_fingerprint, read_archive, InvalidData
+
 SCHEMA_VERSION = "1.0"
 ALLOWED_FILES = ("events.jsonl", "workspace.yaml", "plan.md")
 MAX_FILE_BYTES = 25 * 1024 * 1024
@@ -110,7 +113,7 @@ def build_archive(files: list[tuple[str, bytes]]) -> bytes:
 def prepare(session: Path, output_dir: Path, minimum_age_minutes: int) -> Path:
     files = session_files(session, minimum_age_minutes)
     components = [{"name": name, "sha256": sha256(data), "size_bytes": len(data)} for name, data in files]
-    fingerprint = sha256(json.dumps(components, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    fingerprint = content_fingerprint(components)
     archive_content = build_archive(files)
     archive_name = f"session-{fingerprint}.zip"
     manifest = {
@@ -127,8 +130,25 @@ def prepare(session: Path, output_dir: Path, minimum_age_minutes: int) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     archive_path = output_dir / archive_name
     manifest_path = output_dir / f"session-{fingerprint}.manifest.json"
-    archive_path.write_bytes(archive_content)
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if archive_path.is_symlink() or manifest_path.is_symlink():
+        raise UnsafeSession("既存の出力がシンボリックリンクです")
+    if manifest_path.exists():
+        try:
+            existing, _ = read_archive(output_dir, fingerprint)
+        except (InvalidData, OSError, ValueError, zipfile.BadZipFile) as exc:
+            raise UnsafeSession("既存の梱包データが不正です。上書きせず停止します") from exc
+        if existing["contents"] != components or existing["archive_sha256"] != sha256(archive_content):
+            raise UnsafeSession("既存の梱包内容が異なります")
+        # prepared_at_utc・承認を維持し、同一入力から同一の投入計画を作る。
+        return archive_path
+    if archive_path.exists():
+        if archive_path.read_bytes() != archive_content:
+            raise UnsafeSession("途中作成されたZIPの内容が異なります")
+    else:
+        with archive_path.open("xb") as file:
+            file.write(archive_content)
+    with manifest_path.open("x", encoding="utf-8") as file:
+        file.write(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
     return archive_path
 
 

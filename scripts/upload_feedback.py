@@ -13,6 +13,9 @@ from copilot_learning.aws_bridge import assert_account, aws_command, validate_ap
 from copilot_learning.core import (InvalidData, check_sensitive, digest, load_feedback, read_archive)
 
 
+from copilot_learning.review_safety import require_online_release
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--staging", type=Path, required=True)
@@ -43,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.execute:
             print(f"DRY RUN: 1 feedback -> s3://{args.bucket}/{key}。AWS通信はありません。")
             return 0
+        require_online_release()
         if not args.confirm_feedback_reviewed:
             raise InvalidData("フィードバック本文の目視確認後に--confirm-feedback-reviewedが必要です")
         assert_account(args.account_id, region=args.region, profile=args.profile)

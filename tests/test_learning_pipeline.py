@@ -17,7 +17,7 @@ from copilot_learning.core import (InvalidData, build_memory_requests, json_byte
                                    normalize_events, read_archive)
 from copilot_learning.learning import (BadCandidate, independent_llm_grade, make_report,
                                        grade_candidates, validate_candidates, memory_records_as_candidates,
-                                       generate_candidates, BedrockConverseProvider)
+                                       generate_candidates, BedrockConverseProvider, candidate_sha256)
 from scripts.prepare_sessions import prepare
 from scripts.run_learning_poc import process
 
@@ -47,7 +47,13 @@ class OfflinePipelineTests(unittest.TestCase):
                           "description": "Check env", "instruction": "Python実行環境を確認してからテストする",
                           "generalization": "複数のPythonプロジェクトで適用可能",
                           "evidence_ids": [f"{self.fp}:2", f"{self.fp}:3"]}
-        self.feedback = [{"outcome": "verified_success", "evidence": "12 PASS",
+        complete_events = list(self.logs)
+        complete_events[1] = {"type": "message", "role": "tool", "text": "initial test failed",
+                              "timestamp": "2026-11-01T10:00:30Z"}
+        self.complete_session = normalize_events(self.manifest, complete_events)
+        self.feedback = [{"candidate_sha256": candidate_sha256(self.candidate),
+                          "evidence_ids": self.candidate["evidence_ids"], "claim_verdict": "supported",
+                          "outcome": "verified_success", "evidence": "12 PASS",
                           "session_fingerprint": self.fp, "reusable_lesson": "環境を確認", "feedback_id": "fb1"}]
 
     def test_verified_manifest_normalizer_and_memory_plan(self):
@@ -89,7 +95,7 @@ class OfflinePipelineTests(unittest.TestCase):
             load_feedback(path, self.fp)
 
     def test_grade_with_verified_feedback_is_keep_but_not_auto_approved(self):
-        graded = grade_candidates([self.candidate], self.session, self.feedback)
+        graded = grade_candidates([self.candidate], self.complete_session, self.feedback)
         self.assertEqual(graded[0]["decision"], "keep")
         self.assertFalse(graded[0]["approved_for_copilot"])
 
@@ -110,7 +116,7 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual(grade_candidates([item], self.session, self.feedback)[0]["decision"], "drop")
 
     def test_grade_duplicate_is_drop(self):
-        graded = grade_candidates([self.candidate, dict(self.candidate)], self.session, self.feedback)
+        graded = grade_candidates([self.candidate, dict(self.candidate)], self.complete_session, self.feedback)
         self.assertEqual([item["decision"] for item in graded], ["keep", "drop"])
 
     def test_workflow_requires_dry_run(self):
@@ -189,7 +195,7 @@ class OfflinePipelineTests(unittest.TestCase):
 
     def test_model_adaptor_with_fake_client(self):
         client = MagicMock()
-        client.converse.return_value = {"output": {"message": {"content": [
+        client.converse.return_value = {"stopReason": "end_turn", "usage": {"inputTokens": 10, "outputTokens": 20}, "output": {"message": {"content": [
             {"text": json.dumps({"candidates": [self.candidate]}, ensure_ascii=False)}]}}}
         provider = BedrockConverseProvider("fake-model", "ap-northeast-1", client=client)
         self.assertEqual(len(generate_candidates(provider, self.session, self.feedback)), 1)
@@ -198,16 +204,16 @@ class OfflinePipelineTests(unittest.TestCase):
     def test_independent_grader_cannot_overrule_policy_drop(self):
         graded = grade_candidates([{**self.candidate, "instruction": "disable security checks"}], self.session)
         provider = MagicMock()
-        result = independent_llm_grade(provider, graded)
+        result = independent_llm_grade(provider, graded, self.complete_session, self.feedback)
         self.assertEqual(result[0]["decision"], "drop")
         provider.generate.assert_not_called()
 
     def test_independent_grader_can_downgrade_keep(self):
-        graded = grade_candidates([self.candidate], self.session, self.feedback)
+        graded = grade_candidates([self.candidate], self.complete_session, self.feedback)
         provider = MagicMock()
         provider.generate.return_value = {"decisions": [{"knowledge_id": graded[0]["knowledge_id"],
                                                          "decision": "pending", "reason": "needs second test"}]}
-        updated = independent_llm_grade(provider, graded)
+        updated = independent_llm_grade(provider, graded, self.complete_session, self.feedback)
         self.assertEqual(updated[0]["decision"], "pending")
 
     def test_memory_plan_with_unrecognized_event_has_no_requests(self):

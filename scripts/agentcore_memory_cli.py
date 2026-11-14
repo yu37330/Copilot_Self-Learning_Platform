@@ -12,6 +12,9 @@ from copilot_learning.aws_bridge import (assert_account, list_memory_records,
                                          send_memory_plan, validate_approval)
 from copilot_learning.core import (InvalidData, assert_external_output, digest, json_bytes, read_archive)
 
+from copilot_learning.review_safety import (regenerate_memory_plan, require_online_release,
+                                            operation_scope, validate_operation_scope)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -32,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--approval-file", type=Path, required=True)
     p.add_argument("--expected-account-id", required=True)
     p.add_argument("--memory-id", required=True)
+    p.add_argument("--actor-id", default="copilot_poc_actor")
     p.add_argument("--namespace")
     p.add_argument("--region", default="ap-northeast-1")
     p.add_argument("--profile", default="")
@@ -40,24 +44,29 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--confirm-approved-data", action="store_true")
     args = p.parse_args(argv)
     try:
-        manifest, _ = read_archive(args.staging, args.fingerprint)
-        validate_approval(args.approval_file, args.fingerprint, manifest["archive_sha256"],
+        manifest, events = read_archive(args.staging, args.fingerprint)
+        approval = validate_approval(args.approval_file, args.fingerprint, manifest["archive_sha256"],
                           args.expected_account_id,
-                          manifest_sha256=digest((args.staging / f"session-{args.fingerprint}.manifest.json").read_bytes()))
+                          manifest_sha256=manifest["_snapshot_manifest_sha256"])
         if args.operation == "send":
             if args.memory_plan is None:
                 raise InvalidData("--memory-planが必須です")
             requests = json.loads(args.memory_plan.read_text("utf-8"))
-            if not isinstance(requests, list) or not requests:
-                raise InvalidData("Memoryのイベント配列が必要です")
-            for item in requests:
-                if item.get("memoryId") != args.memory_id or item.get("sessionId") != f"s_{args.fingerprint[:48]}":
-                    raise InvalidData("Memory ID / 対象セッションが一致しません")
+            requests = regenerate_memory_plan(manifest, events, requests, args.memory_id, args.actor_id)
+            scope = operation_scope("memory-send", {
+                "memory_id": args.memory_id, "actor_id": args.actor_id,
+                "region": args.region, "account_id": args.expected_account_id}, requests,
+                {"archive": manifest["archive_sha256"], "manifest": manifest["_snapshot_manifest_sha256"]})
             if not args.execute:
                 print(f"DRY RUN: {len(requests)} eventsを{args.memory_id}へ送信する計画。AWS通信はありません。")
                 return 0
             if not args.confirm_approved_data:
                 raise InvalidData("送信には--execute --confirm-approved-dataが両方必要です")
+            assert_external_output(args.out, REPO_ROOT)
+            if args.out.exists():
+                raise InvalidData("受領記録の出力先が既存です。通信前に停止します")
+            validate_operation_scope(approval.get("operation_scope"), scope)
+            require_online_release()
             assert_account(args.expected_account_id, region=args.region, profile=args.profile)
             response = send_memory_plan(requests, region=args.region, profile=args.profile)
             write_once(args.out, {"memory_id": args.memory_id, "session_fingerprint": args.fingerprint,
@@ -71,6 +80,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if not args.confirm_approved_data:
             raise InvalidData("取得には--execute --confirm-approved-dataが両方必要です")
+        assert_external_output(args.out, REPO_ROOT)
+        if args.out.exists():
+            raise InvalidData("受領記録の出力先が既存です。通信前に停止します")
+        scope = operation_scope("memory-export", {
+            "memory_id": args.memory_id, "actor_id": args.actor_id,
+            "namespace": args.namespace, "region": args.region, "account_id": args.expected_account_id},
+            {"memoryId": args.memory_id, "namespace": args.namespace},
+            {"archive": manifest["archive_sha256"], "manifest": manifest["_snapshot_manifest_sha256"]})
+        validate_operation_scope(approval.get("operation_scope"), scope)
+        require_online_release()
         assert_account(args.expected_account_id, region=args.region, profile=args.profile)
         results = list_memory_records(args.memory_id, args.namespace, region=args.region, profile=args.profile)
         write_once(args.out, results)
