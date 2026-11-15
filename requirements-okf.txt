@@ -1,0 +1,2 @@
+# OKF frontmatterの安全な構造検査用（AWS・モデルの実行はしない）
+PyYAML>=6.0.2,<7

@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from copilot_learning.core import InvalidData, assert_external_output, json_bytes
 from copilot_learning.privacy_scan import load_policy
 from copilot_learning.wiki import (ROOT, _path, read_json, source_snapshot, wiki_prompt,
-                                    compile_wiki, export_wiki, verify_wiki, query_wiki)
+                                    compile_wiki, export_wiki, verify_wiki, query_wiki, migrate_wiki_to_okf)
 from copilot_learning.wiki_matrix import build_wiki_matrix
 
 
@@ -27,7 +27,7 @@ def write_new(path: Path, data: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("operation", choices=["prompt", "build", "verify", "query", "matrix"])
+    p.add_argument("operation", choices=["prompt", "build", "verify", "query", "matrix", "migrate-okf"])
     for name in ("input", "policy", "proposal", "previous", "out", "directory", "base-suite"):
         p.add_argument("--" + name, type=Path)
     p.add_argument("--mode", choices=["agentcore", "original"])
@@ -56,6 +56,10 @@ def main(argv: list[str] | None = None) -> int:
             revision = compile_wiki(snapshot, read_json(args.proposal), sensitive_literals=terms["sensitive_literals"],
                                     generator=args.generator, previous=previous)
             result = export_wiki(revision, args.out)
+        elif args.operation == "migrate-okf":
+            result = migrate_wiki_to_okf(args.directory, snapshot, args.out,
+                                         expected_manifest_sha256=args.manifest_sha256,
+                                         sensitive_literals=terms["sensitive_literals"])
         else:
             result = verify_wiki(args.directory, snapshot, expected_manifest_sha256=args.manifest_sha256,
                                  sensitive_literals=terms["sensitive_literals"])
