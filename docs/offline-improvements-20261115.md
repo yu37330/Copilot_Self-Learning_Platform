@@ -17,11 +17,11 @@
 `copilot_learning/knowledge_store.py` はPython標準SQLiteを使い、候補を `proposed` で登録します。人間の明示操作を経て `pending` → `active`、後日 `retired / superseded` に遷移できます。revision番号によるCAS、履歴、重複防止、原本SHAを持ち、active以外は検索しません。
 
 ```powershell
-# Git管理外にDBを置く。以下のJSONは合成・社内承認済みデータのみ使用
+# Git管理外にDBを置く。以下は合成データ用。実データ使用時は所有者の許可と適用ポリシーを確認
 python scripts/knowledge_offline.py --db "$env:USERPROFILE\copilot-knowledge\knowledge.sqlite" register `
   --candidate "<gradeされた候補1件のJSON>" --source "<原本SHAを含むJSON>"
 
-# 状態変更（SSO本人認証は未実装。社内正式承認の代用にはならない）
+# 状態変更（本人/組織の認証は未実装。正式承認の代用にはならない）
 python scripts/knowledge_offline.py --db "$env:USERPROFILE\copilot-knowledge\knowledge.sqlite" transition `
   --id "<knowledge_id>" --to pending --expected-revision 1 `
   --reviewer "<識別子>" --reason "確認開始" --confirm-manual-review
@@ -53,7 +53,7 @@ python scripts/evaluate_offline.py --cases "<holdout_cases.json>" `
 
 - #6 承認主体・DLP・不変S3スナップショットとAWS接続の完成。通信停止は継続。
 - #7 適用条件の意味推論、評価用の適用除外ケース拡充、候補ごとの人間の監査。
-- #8 実組織の署名/SSO承認、Git/クラウド台帳との同期と再現性検証。
+- #8 本人/組織の署名・認証/承認、Git/クラウド台帳との同期と再現性検証。
 - #9 複数プロジェクトでの検索指標、形態素解析/埋め込み手法との比較。
 - #10 同一データでA/B/Cを実際に動かす検収、Copilotに知識を戻した際の実効評価。
 - #11 Copilotへの読み取り専用再利用・Workflow DSL・自動実行。未実装。

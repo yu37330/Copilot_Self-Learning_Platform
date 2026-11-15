@@ -2,7 +2,7 @@
 
 # Copilot学習用途のAgentCore Memory推奨設定と限界
 
-確認日: 2026-11-15。対象: 既存Windows Copilotのセッションを後日収集し、知識抽出・改善効果を比較するPoC。AWSリソースの作成、設定変更、実送信は実施していない。本書の数値は**初期の実験案**であり、最適値・改善効果を実測済みという意味ではない。
+確認日: 2026-11-15。**対象: Windows PCでGitHub Copilotを使う開発者（個人・チーム・企業）**のセッションを後日収集し、知識抽出・改善効果を比較するPoC。AWSリソースの作成、設定変更、実送信は実施していない。本書の数値は**初期の実験案**であり、最適値・改善効果を実測済みという意味ではない。実Copilotの保存形式も未検証。
 
 ## 1. 結論
 
@@ -35,13 +35,13 @@
 | Semantic namespace | `/facts/{memoryStrategyId}/actor/{actorId}/` | 事実と経験を検索時に区別 |
 | 短期イベント保持 | `eventExpiryDuration=30`日 | 原本は承認済みS3に別保存し、Memory上の重複保存を長期化しない |
 | 長期記憶保持 | 90日を候補 | 古い環境知識を残し過ぎない。別設定・対象環境のAPI対応確認が必須 |
-| 検索件数 | Reflection 3、Episode 3、Semantic 2 | 合計8件程度から評価。AWS既定値ではなくアプリ側の提案値 |
+| 検索件数 | Reflection 3、Episode 3、Semantic 2（候補） | 合計8件の検討案。**公平比較では共通topK総量6を優先**する。AWS既定値ではない |
 | 検索範囲 | actorとstrategyを絞る | 全体`/`検索を初期のアプリ設計では禁止 |
 | メタデータ | 必要に応じrepo/runtime/version/os/outcome | フィルタ用keyとschemaを宣言。LLM推定のoutcomeを承認・成功証明として使わない |
-| 暗号化・権限 | 会社のKMS、最小IAM、取得/書込/管理の分離 | namespace名だけではアクセス制御にならない |
+| 暗号化・権限 | 対象AWSアカウントのKMS、最小IAM、取得/書込/管理の分離 | namespace名だけではアクセス制御にならない |
 | モデル | 最初はbuilt-in。overrideは対象リージョンで承認されたモデルを比較 | 未確認の特定モデルIDを固定しない。生成費用も別計測 |
 
-Reflectionは別actorを跨ぐ設定も可能だが、今回の初期案では行わない。反省のnamespaceをsessionのままにすると、セッションを跨ぐ教訓抽出の範囲が狭くなる。逆にstrategy全体へ広げると利用者横断になる。会社のデータ境界と同じ単位で決める。[1][5]
+Reflectionは別actorを跨ぐ設定も可能だが、今回の初期案では行わない。反省のnamespaceをsessionのままにすると、セッションを跨ぐ教訓抽出の範囲が狭くなる。逆にstrategy全体へ広げると利用者横断になる。データ所有者・プロジェクト・利用者の権限境界に合わせて決める。[1][5]
 
 ### 保持期間は別々に管理する
 
@@ -54,6 +54,28 @@ Reflectionは別actorを跨ぐ設定も可能だが、今回の初期案では�
 公式にはindexedKeysとstrategyのmetadataSchemaによる属性抽出・検索フィルタがある。最大10のindexed keyは追加後に削除できない。必要なものだけ宣言する。確定したプロジェクト等は信頼できるアプリ入力から渡し、対応している環境では`STRICTLY_CONSISTENT`等を使う。LLMが抽出した値をIAM権限・正式承認の代替にしない。[9]
 
 `RetrieveMemoryRecords`は意味検索。topKは既定10・最大100。返されるスコアは類似度であって「正しい確率」ではない。検索文は単語だけでなく「目的・症状・環境・版・何が確認済みか」を短く含め、取得後にも適用範囲を確認する。Episodeはintent、Reflectionはuse caseを基に索引化される。[1][10]
+
+## 3A. Memoryの作成設定とRuntimeでの利用設定は別
+
+**① Memoryリソースの作成設定**：Episodic/Semantic/Summary/User preference、namespace、保持期間、モデルoverride等は、この文書と[設計JSON](../examples/agentcore_memory_profile.design.json)に**設計案**があります。このJSONは`CreateMemory`のAPIリクエストとしては使えません。AWS上のMemoryリソースは作成していません。
+
+**② 単一Runtimeへの割当設定**：`infra/single-runtime.yaml`の`MemoryProfilesJson`と実行時の`MEMORY_PROFILES_JSON`は、作成済みMemoryの`memory_id`、`actor_id`、`namespace`、`strategy_ids`、`project`を紐付けます。ジョブは`memory_profile`名で選びます。**この設定はMemoryを作成せず、戦略やTTLも設定しません。**
+
+次の合成例は形を説明するもので、**実在するMemoryやstrategy IDではなく、そのままAWSで使える設定ではありません**。
+
+```json
+{
+  "episodic_demo": {
+    "memory_id": "DemoMemory-0123456789",
+    "actor_id": "windows_copilot_user",
+    "namespace": "/strategy/demo-strategy/actor/windows_copilot_user/",
+    "strategy_ids": ["demo-strategy"],
+    "project": "demo_project"
+  }
+}
+```
+
+Memory作成後は実際のID・namespaceと、プロジェクト/実験条件ごとの分離を検証してから割り当てます。`EnableMemoryAccess=false`が既定で、オンライン実行の`require_online_release()`も解除されません。個人・チーム・企業のいずれでも、この停止を設計JSONや環境変数で解除することはできません。
 
 ## 4. 用途向けのプロンプト調整
 
@@ -87,7 +109,7 @@ overrideにはmemoryExecutionRoleArn、対象モデルの利用権限が必要�
 | 複数経験からのReflection | Episodicで可能 | 根拠の検証、反証評価、適用除外の独立評価 |
 | ドメイン向け抽出調整 | overridesで可能 | schema変更が必要なら別変換または自作 |
 | 意味検索・属性絞込み | APIで可能 | 検索実行、権限スコープ決定、Copilotへの文脈提供 |
-| 機密検査・署名承認 | 独立した社内検収を設定だけで完結はできない | DLP、本人性、承認範囲固定、送信時再検証 |
+| 機密検査・署名承認 | Memory設定だけでは独立した利用許可/検収は完結しない | データ所有者の許可・本人性/送信範囲の固定と再検証。組織利用では必要なDLP/追加承認 |
 | SKILL.mdの配布・Copilotへ適用 | Memory設定の役割ではない | Skill出力・配布承認・取込み・失効 |
 | Workflowを生成し安全実行 | Memory設定の役割ではない | DSL、ツール権限、副作用の承認、フォールバック |
 | 知識の有効性・品質向上の証明 | できない | 未学習タスクでの対照実験、誤適用・費用評価 |
@@ -97,7 +119,7 @@ overrideにはmemoryExecutionRoleArn、対象モデルの利用権限が必要�
 
 ## 6. S3から後日学習する際の手順と注意
 
-1. S3原本・フィードバック・観測結果を同じ確定版として選定し、社内承認する。
+1. S3原本・フィードバック・観測結果を同じ確定版として選定し、データ所有者の送信許可と適用される規約（組織利用では所属先のポリシー）を確認する。
 2. Memory戦略がACTIVEになった後、安定したactor/session IDと元の順序でイベントを投入する。
 3. Episodicはepisode完了の検出後に生成される。投入成功と長期記憶生成完了を分ける。取得0件だけで失敗と判定しない。
 4. ReflectionとEpisodeを取得して原本・strategy・namespace・設定版に紐付け、後段の評価へ渡す。

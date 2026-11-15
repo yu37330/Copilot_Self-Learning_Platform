@@ -1,13 +1,13 @@
 # Copilot Self-Learning Platform — アーキテクチャ v2
 
-更新: **2026-11-15 / PR #27まで**。単一AgentCore Runtime（CodeZip）のコードと合成E2Eは実装済みですが、**AWSへは未デプロイ**。初期の「S3保存のみ」のPhase 0設計とは異なります。Managed Harnessは使用しません。
+更新: **2026-11-15 / PR #27まで**。**対象はWindows PCでGitHub Copilotを使う開発者（個人・チーム・企業）**です。単一AgentCore Runtime（CodeZip）のコードと合成E2Eは実装済みですが、**AWSへは未デプロイ**。実Copilotの保存形式は対象PCで未検証。初期の「S3保存のみ」のPhase 0設計とは異なります。Managed Harnessは使用しません。
 
 ## 全体構成
 
 ```mermaid
 flowchart TB
   A[Windows Copilot session-state] --> B[選別/ZIP/SHA/機密検査]
-  B --> C{社内の情報分類・送信承認}
+  B --> C{データ所有者の許可・送信先の確認}
   C -->|未承認| D[ローカル保留]
   C -. 承認後のみ .-> E[(S3 private/versioned: inputs/objects)]
   E --> F[inputs/ready/*.job.json: VersionId/SHAを固定]
@@ -63,6 +63,6 @@ Memory待ちはGSIの候補を本体の強整合読取で再確認し、revision
 
 ## 安全性と残課題
 
-`require_online_release()`はAWS実送受信を無条件停止します。フラグでは解除不可。公開Gitへ社内セッション・承認履歴・鍵・機密辞書を保存しません。ARM64/AL2023実起動、CFN/IAM/KMS、Scheduler/GSI/S3通知の実動作、実LLM/Memory/Copilot、社内SSO/DLPは未検証です。Wikiは`draft`、`approved_for_copilot=false`で、39条件runner/費用実測/安全なCopilot自動適用も未完成です。
+`require_online_release()`はAWS実送受信を無条件停止します。フラグでは解除不可。公開Gitへ個人/組織の非公開セッション・承認履歴・鍵・機密辞書を保存しません。ARM64/AL2023実起動、CFN/IAM/KMS、Scheduler/GSI/S3通知の実動作、実LLM/Memory/Copilot、利用形態に応じた認証/情報保護（組織利用ではSSO/DLP等）は未検証です。Wikiは`draft`、`approved_for_copilot=false`で、39条件runner/費用実測/安全なCopilot自動適用も未完成です。
 
 次に読む資料: [現在地](current-status-20261115.md)、[Runtime/CodeZip](single-runtime-codezip-20261115.md)、[Memory再開](memory-resume-20261115.md)、[比較実験](full-experiment-suite-20261115.md)、[Wiki/OKF](okf-wiki-20261115.md)。

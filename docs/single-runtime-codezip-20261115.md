@@ -69,7 +69,7 @@ AWSの `ListMemoryExtractionJobs` / `StartMemoryExtractionJob` は失敗した�
 - S3はExpectedBucketOwner/VersionId/本文SHA/KMS ARNを検証。結果はSSE-KMS、IfNoneMatch、ChecksumSHA256で保存。同一PUT競合は実バイト列とサービスchecksumを照合してから同一扱い。
 - Runtime内の一時ディスクはTemporaryDirectoryのみ。永続DBとしてSQLiteを配置しない。既存の知識台帳を自動active化しない。
 - モデル入力サイズ、呼出回数、出力トークン、SDKの接続/read timeout、ジョブ時間、Memoryのページ数/poll数を制限。これはドル建ての課金上限保証ではない。料金未取得はnull。
-- 例外の本文・入力・出典・パスをHTTP/ジョブエラーへ露出しない。privacyチェックは完全な企業DLPではない。
+- 例外の本文・入力・出典・パスをHTTP/ジョブエラーへ露出しない。privacyチェックは個人/組織の非公開情報を完全に検出せず、組織利用のDLPも代替しない。
 
 ## オフラインで実行
 
@@ -84,15 +84,15 @@ python .\main.py --port 18080
 
 デモはtests/runtime_support.pyの合成モデル・合成Memory・メモリ内S3/台帳を注入する。**実LLMが学習した結果ではない。** `main.py` のproduction経路は同じテスト用注入へ切り替えられず、既存 `require_online_release()` を通る。環境変数で停止を解除する機能はない。`GET /ping` は200、未承認の `POST /invocations` は503/ONLINE_RELEASE_BLOCKEDになる。
 
-ビルダーはインストール済みの固定バージョンを同梱し、純Pythonコードだけを収録する。PyYAMLの任意C拡張を除き、純Python SafeLoaderで動くことを検証する。x86_64バイナリをARM64向けとして配らない。ライセンス/依存metadataとBUILD-MANIFESTを同梱し、データ・テスト・鍵・辞書はZIPから除外する。今の経路はcryptographyを呼ばず、社内署名検証の実統合は安全停止解除前の別工程。ネイティブ依存を追加する場合はARM64 wheelの収録方式またはDockerを別途整備する。
+ビルダーはインストール済みの固定バージョンを同梱し、純Pythonコードだけを収録する。PyYAMLの任意C拡張を除き、純Python SafeLoaderで動くことを検証する。x86_64バイナリをARM64向けとして配らない。ライセンス/依存metadataとBUILD-MANIFESTを同梱し、データ・テスト・鍵・辞書はZIPから除外する。今の経路はcryptographyを呼ばず、本人/組織の正式な署名・承認と送信範囲の実検証は安全停止解除前の別工程。ネイティブ依存を追加する場合はARM64 wheelの収録方式またはDockerを別途整備する。
 
 ## 配備定義（この変更では実行しない）
 
 同じZIPをRuntimeのCodeConfigurationとLambdaのコードに使用する。RuntimeはPYTHON_3_13 / main.py、Lambdaはpython3.13 / arm64 / lambda_function.lambda_handler。CloudFormationは新しいprivate/versioned/KMS bucketとジョブDynamoDB、S3通知、Lambda、1 Runtimeを定義する。データbucket/台帳はRetain、通知は初期false。
 
-配備前に必要な値: code bucket/key/version、ZIP SHA、会社承認KMS、許可モデルID/ARN、Memory binding/ARN、必要な辞書。コードZIPのKMSはこのテンプレートではDataKmsKeyArnと同じキーを使う前提。AWS制約・KMS key policy・Runtime実行ロール・リージョン・モデル利用権限・Memory戦略を実環境で検証する。PUBLIC networkはAWS Runtimeのネットワーク指定であり、S3公開の意味ではない。社内VPC/endpoint必須条件は別途反映が必要。
+配備前に必要な値: code bucket/key/version、ZIP SHA、対象AWSアカウントで利用許可済みのKMS、許可モデルID/ARN、Memory binding/ARN、必要な辞書。コードZIPのKMSはこのテンプレートではDataKmsKeyArnと同じキーを使う前提。AWS制約・KMS key policy・Runtime実行ロール・リージョン・モデル利用権限・Memory戦略を実環境で検証する。PUBLIC networkはAWS Runtimeのネットワーク指定であり、S3公開の意味ではない。VPC/endpointが必要な利用環境では別途反映が必要。
 
-**通知をtrueにしてもコードの送信停止は解除されない。CloudFormationの用意とデプロイ成功・社内承認を混同しない。** 現段階の実運用投入は禁止。LambdaのDLQは起動失敗用で、受付後にRuntimeで失敗したjobはDynamoDB/結果参照による監視が別途必要。
+**通知をtrueにしてもコードの送信停止は解除されない。CloudFormationの用意とデプロイ成功・利用許可を混同しない。** 現段階の実運用投入は禁止。LambdaのDLQは起動失敗用で、受付後にRuntimeで失敗したjobはDynamoDB/結果参照による監視が別途必要。
 
 ## 今回確認したこと / 未確認
 
@@ -100,7 +100,7 @@ python .\main.py --port 18080
 - 新規64テスト: 六つのモード、Lambda→Runtime→OKF、actual localhost HTTP、重複/改変/途中再開、SDK引数形、checksum、ページング、CodeZip自己完結import、production外部通信拒否。
 - 依存同梱ZIPをLinux x86_64/Python3.13.5の `-I -S`（site-packagesを使わない）で実起動。/ping 200、/invocations 503を確認。8080が使用中のためローカルsmokeだけ別port。AWSでの既定は8080。
 - 六モードの合成E2Eを実行。実AWS/Memory/LLM呼出しとGitHub Actions実行は0。
-- **PR #27でMemory待ち自動再開コードを追加済み**（関連98件の合成テストPASS）。AWS ARM64/AL2023起動、CloudFormation実デプロイ、会社認証/DLP、実Memory抽出完了・実性能比較、39条件全体のrunner、実Copilotは未検証または未実装。Issue #25と関連IssueはOPENのまま。
+- **PR #27でMemory待ち自動再開コードを追加済み**（関連98件の合成テストPASS）。AWS ARM64/AL2023起動、CloudFormation実デプロイ、適用される認証/情報保護（組織利用のDLP含む）、実Memory抽出完了・実性能比較、39条件全体のrunner、実Copilotは未検証または未実装。Issue #25と関連IssueはOPENのまま。
 
 ## 一次仕様（2026-11-15確認）
 
