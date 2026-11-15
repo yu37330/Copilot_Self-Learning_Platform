@@ -14,7 +14,8 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり社内認証ではない |
 | A/B/C/Dの共通・ペア比較と検索評価 | 評価器を実装。実サービスを走らせた比較ではない |
 | Skillプレビューの出力・再検証 | 実装。既存のSkills/Instructionsに書き込まない |
-| WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。実LLM編集は未接続 |
+| WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。Runtimeのモデル呼出経路は実装、実LLMは未検証 |
+| 単一Runtime（CodeZip）・S3起動Lambda | HTTP入口、既存処理の統合、依存同梱ZIP、CFN定義・モック結合検証。AWS実デプロイ未実施 |
 | Copilotへの動的注入・Workflow実行 | 未実装 |
 
 **テスト成功や候補のkeep判定は、学習品質向上・社内運用承認を示しません。**
@@ -22,14 +23,14 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 
 ## 前提
 
-ローカル処理はPython 3.10以降を想定。署名検証には`cryptography`、WikiのOKF出力・構造検査には`requirements-okf.txt`のPyYAMLが必要です。検証実行はLinux/Python 3.13で、Windows PowerShell・AWS・Copilot実機は未検証です。WSL2/Dockerは初期要件に含めません。CI/GitHub Actionsは使用しません。
+既存ローカル処理はPython 3.10以降、CodeZipと今回のRuntime検証はPython 3.13を対象。署名検証には`cryptography`、WikiのOKF出力・構造検査には`requirements-okf.txt`のPyYAMLが必要です。検証実行はLinux/Python 3.13で、Windows PowerShell・AWS・Copilot実機は未検証です。WSL2/Dockerは初期要件に含めません。CI/GitHub Actionsは使用しません。
 
 ## AWS・Copilot不要の確認
 
 リポジトリのルートから実行します。デモ出力先は**Git管理外の新規フォルダ**にしてください。
 
 ```powershell
-python -m pip install -r requirements-okf.txt
+python -m pip install -r requirements-okf.txt -r requirements-runtime.txt
 python -m unittest discover -s tests -v
 python .\scripts\demo_offline.py --out "$env:USERPROFILE\copilot-learning-demo-01"
 python .\scripts\demo_skill_preview.py --out "$env:USERPROFILE\copilot-skill-preview-demo-01"
@@ -75,3 +76,16 @@ python .\scripts\prepare_sessions.py --session "<確認したID>" --out "$env:US
 - [Wiki二方式](docs/wiki-dual-approach-20261115.md) / [OKF対応・移行](docs/okf-wiki-20261115.md)
 
 古い設計文書にあるオンライン手順は現時点では利用できません。会社の正式承認・送信経路の独立検収・実環境試験の完了後に、別変更として再開判断します。Issue #6〜#11は残課題を維持しています。
+
+## 単一RuntimeのCodeZip（Issue #25）
+
+Managed Harnessを使用せず、S3の版付きreadyジョブ→Lambda→1つのRuntimeで処理します。`custom`、`original_wiki`、`custom_and_original_wiki`、`memory_ingest`、`memory_wiki`、`hybrid`を選択できます。既存の学習・引用検査・OKF処理を再利用し、Runtime内でWikiのBedrock呼出経路まで接続しました。実モデル・AWSとの動作は未検証で、既存の外部実行停止を維持しています。
+
+```powershell
+python -m pip install -r requirements-runtime.txt
+python .\scripts\demo_single_runtime.py --out "$env:USERPROFILE\single-runtime-demo-01"
+python .\scripts\build_runtime_zip.py --out "$env:USERPROFILE\copilot-runtime.zip"
+python .\main.py --port 18080
+```
+
+`/ping`は起動確認、`/invocations`のproduction経路は安全レビュー前のため503になります。ローカル合成デモはテスト専用アダプターを使います。コードがあることを社内運用承認とは扱いません。[構成・モード・入力・再開・ZIP配備手順・未完了事項](docs/single-runtime-codezip-20261115.md)を参照してください。

@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Single CodeZip Runtime plus S3 trigger Lambda. Offline safety gate remains BLOCKED.
+Parameters:
+  RuntimeName:
+    Type: String
+    Default: copilot_learning
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_]{0,47}'
+  DataBucketName:
+    Type: String
+    Description: New private versioned bucket name; do not name an existing bucket.
+  DataKmsKeyArn:
+    Type: String
+    Description: Approved same-account regional KMS key; key policy must permit the generated roles.
+  CodeBucketName:
+    Type: String
+    Description: Existing bucket containing the pre-uploaded tested CodeZip.
+  CodeKey:
+    Type: String
+  CodeVersionId:
+    Type: String
+    MinLength: 3
+  CodeSha256:
+    Type: String
+    AllowedPattern: "[a-f0-9]{64}"
+    Description: SHA-256 printed by build_runtime_zip.py for the uploaded CodeVersionId.
+  AllowedModelIds:
+    Type: String
+    Description: Comma-separated approved Bedrock model IDs; no default model is silently selected.
+  AllowedModelArns:
+    Type: CommaDelimitedList
+    Description: Matching exact foundation-model or inference-profile resource ARNs.
+  MemoryProfilesJson:
+    Type: String
+    Default: '{}'
+    MaxLength: 2048
+  EnableMemoryAccess:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+  AllowedMemoryArns:
+    Type: CommaDelimitedList
+    Default: ''
+  SensitiveLiteralsJson:
+    Type: String
+    Default: '[]'
+    NoEcho: true
+    MaxLength: 2048
+  EnableS3Trigger:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Enabling notifications does NOT remove the code-level online safety gate.
+Conditions:
+  MemoryAccess: !Equals [!Ref EnableMemoryAccess, 'true']
+  TriggerEnabled: !Equals [!Ref EnableS3Trigger, 'true']
+Resources:
+  Jobs:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: job_id, AttributeType: S}]
+      KeySchema: [{AttributeName: job_id, KeyType: HASH}]
+      PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: true}
+      SSESpecification: {SSEEnabled: true}
+  DispatchFailures:
+    Type: AWS::SQS::Queue
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600
+  RuntimeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: bedrock-agentcore.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref 'AWS::AccountId'}
+              ArnLike: {aws:SourceArn: !Sub 'arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*'}
+      Policies:
+        - PolicyName: learning-runtime-scoped
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:GetObjectVersion]
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${DataBucketName}/inputs/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${DataBucketName}/results/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${CodeBucketName}/${CodeKey}'
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${DataBucketName}/results/*'
+              - Effect: Allow
+                Action: [kms:Decrypt, kms:GenerateDataKey]
+                Resource: !Ref DataKmsKeyArn
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem]
+                Resource: !GetAtt Jobs.Arn
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource: !Ref AllowedModelArns
+              - !If
+                - MemoryAccess
+                - Effect: Allow
+                  Action: [bedrock-agentcore:CreateEvent, bedrock-agentcore:ListMemoryRecords, bedrock-agentcore:GetMemory]
+                  Resource: !Ref AllowedMemoryArns
+                - !Ref 'AWS::NoValue'
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/*'
+  LearningRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Ref RuntimeName
+      Description: One custom Python Runtime; no Managed Harness.
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3: {Bucket: !Ref CodeBucketName, Prefix: !Ref CodeKey, VersionId: !Ref CodeVersionId}
+          Runtime: PYTHON_3_13
+          EntryPoint: [main.py]
+      RoleArn: !GetAtt RuntimeRole.Arn
+      ProtocolConfiguration: HTTP
+      NetworkConfiguration: {NetworkMode: PUBLIC}
+      LifecycleConfiguration: {IdleRuntimeSessionTimeout: 300, MaxLifetime: 3600}
+      EnvironmentVariables:
+        CODE_SHA256: !Ref CodeSha256
+        DATA_BUCKET: !Ref DataBucketName
+        EXPECTED_BUCKET_OWNER: !Ref 'AWS::AccountId'
+        RUNTIME_REGION: !Ref 'AWS::Region'
+        DATA_KMS_KEY_ARN: !Ref DataKmsKeyArn
+        JOB_TABLE: !Ref Jobs
+        ALLOWED_MODEL_IDS: !Ref AllowedModelIds
+        MEMORY_PROFILES_JSON: !Ref MemoryProfilesJson
+        SENSITIVE_LITERALS_JSON: !Ref SensitiveLiteralsJson
+  TriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: invoke-only-ready-jobs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:GetObjectVersion]
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${DataBucketName}/inputs/ready/*'
+              - Effect: Allow
+                Action: [kms:Decrypt, kms:GenerateDataKey]
+                Resource: !Ref DataKmsKeyArn
+              - Effect: Allow
+                Action: bedrock-agentcore:InvokeAgentRuntime
+                Resource: !GetAtt LearningRuntime.AgentRuntimeArn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt DispatchFailures.Arn
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-trigger:*'
+  Trigger:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-trigger'
+      Runtime: python3.13
+      Architectures: [arm64]
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt TriggerRole.Arn
+      Timeout: 120
+      MemorySize: 256
+      ReservedConcurrentExecutions: 2
+      Code: {S3Bucket: !Ref CodeBucketName, S3Key: !Ref CodeKey, S3ObjectVersion: !Ref CodeVersionId}
+      DeadLetterConfig: {TargetArn: !GetAtt DispatchFailures.Arn}
+      Environment:
+        Variables:
+          CODE_SHA256: !Ref CodeSha256
+          DATA_BUCKET: !Ref DataBucketName
+          EXPECTED_BUCKET_OWNER: !Ref 'AWS::AccountId'
+          RUNTIME_REGION: !Ref 'AWS::Region'
+          DATA_KMS_KEY_ARN: !Ref DataKmsKeyArn
+          RUNTIME_ARN: !GetAtt LearningRuntime.AgentRuntimeArn
+          RUNTIME_QUALIFIER: DEFAULT
+          ALLOWED_MODEL_IDS: !Ref AllowedModelIds
+          MEMORY_PROFILES_JSON: !Ref MemoryProfilesJson
+  TriggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref Trigger
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:${AWS::Partition}:s3:::${DataBucketName}'
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: TriggerPermission
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref DataBucketName
+      VersioningConfiguration: {Status: Enabled}
+      OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: 'aws:kms', KMSMasterKeyID: !Ref DataKmsKeyArn}
+      NotificationConfiguration:
+        LambdaConfigurations: !If
+          - TriggerEnabled
+          - - Event: 's3:ObjectCreated:*'
+              Function: !GetAtt Trigger.Arn
+              Filter:
+                S3Key:
+                  Rules: [{Name: prefix, Value: inputs/ready/}, {Name: suffix, Value: .job.json}]
+          - []
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!Sub 'arn:${AWS::Partition}:s3:::${DataBucketName}', !Sub 'arn:${AWS::Partition}:s3:::${DataBucketName}/*']
+            Condition: {Bool: {aws:SecureTransport: 'false'}}
+Outputs:
+  RuntimeArn: {Value: !GetAtt LearningRuntime.AgentRuntimeArn}
+  RuntimeVersion: {Value: !GetAtt LearningRuntime.AgentRuntimeVersion}
+  JobTableName: {Value: !Ref Jobs}
+  InputReadyPrefix: {Value: !Sub 's3://${DataBucketName}/inputs/ready/'}
+  ResultPrefix: {Value: !Sub 's3://${DataBucketName}/results/'}
+  DispatchFailureQueue: {Value: !Ref DispatchFailures}
