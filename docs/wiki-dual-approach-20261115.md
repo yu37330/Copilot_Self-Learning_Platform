@@ -66,7 +66,7 @@ python .\scripts\wiki_offline.py matrix `
 
 ## 7. 残課題
 
-Memoryの実作成・投入・非同期抽出完了の独立検収、実LLM生成品質と自律的な反復編集、意味的な矛盾評価、署名済みWiki採用状態と既存KnowledgeStoreとの連携、検索文脈の実提供、39条件の観測変換と実runner、実タスク比較、会社DLP/SSO/Windows検証が未完了。Memory投入/取得とモデル呼出経路、有限回再開コードは実装済みですが実AWSで未検証です。Issue #21はOPENのまま。
+Memoryの実作成・投入・非同期抽出完了の独立検収、実LLM生成品質と自律的な反復編集、意味的な矛盾評価、署名済みWiki採用状態と既存KnowledgeStoreとの連携、検索文脈の実提供、39条件の観測変換と実runner、実タスク比較、データ利用権限・必要なDLP/SSO・Windows Copilot実機検証が未完了。Memory投入/取得とモデル呼出経路、有限回再開コードは実装済みですが実AWSで未検証です。Issue #21はOPENのまま。
 
 ## 一次資料（2026-11-15確認）
 

@@ -69,7 +69,7 @@ python scripts\build_runtime_zip.py --out "$env:USERPROFILE\copilot-runtime-resu
 
 合成アダプターで「0件 → WAITING_MEMORY → 定期点検 → retry → Wiki生成/OKF」を通す。起動前/起動後の応答消失、重複点検、期限/回数、設定改変、残時間、GSIの古い行、ネットワーク停止を検査。BotocoreによるAPI引数の形の検査と、CloudFormation静的検査を行う。
 
-DynamoDBの実際の条件式評価やGSI反映遅延、Scheduler配送、IAM、ARM64/AL2023上の起動はモックでは証明できず未検証。39条件全体の実験ランナー、Memory全戦略の作成/抽出完了検収、社内認証/DLPは別の残課題。
+DynamoDBの実際の条件式評価やGSI反映遅延、Scheduler配送、IAM、ARM64/AL2023上の起動はモックでは証明できず未検証。39条件全体の実験ランナー、Memory全戦略の作成/抽出完了検収、データ利用許可・認証/情報保護（組織利用ではSSO/DLP）は別の残課題。
 
 ## 一次資料（2026-11-15確認）
 

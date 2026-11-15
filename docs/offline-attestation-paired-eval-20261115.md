@@ -1,18 +1,18 @@
 # Issue #6 / #10: 署名付き承認証跡と4方式ペア評価（オフライン）
 
-更新日: 2026-11-15。AWS・GitHub Copilot・会社の認証基盤を使わない構成。
+更新日: 2026-11-15。AWS・GitHub Copilot・外部認証基盤を使わない合成検証。対象はWindows PCのGitHub Copilot利用者（個人・チーム・企業）。
 
 ## 1. 既存設計との関係
 
 - `freeze_memory_bundle` でZIP・manifest・Memory計画・フィードバックを固定し、`receipt.json` でSHA-256を管理する。
-- `scan_frozen_bundle` は既知パターンと社内固有語の**オフライン検出器**。検出0件でも正式なDLPを代替しない。
+- `scan_frozen_bundle` は既知の秘密情報パターンと利用環境固有語の**オフライン検出器**。検出0件でも利用者/組織の正式な情報保護確認を代替しない。
 - 新しい `verify_attestation` は **Ed25519の署名・独立保管されたtrust-store SHA-256・確定receipt・DLPレポート・操作scope** を検証する。
-- 署名確認の成功は「承認者本人が会社からその権限を与えられた」と同義ではない。発行鍵、承認組織・IAM/SSO、規程とDLPの検証は**別工程**であり、`organization_identity_verified=false` とする。
+- 署名確認の成功は「署名者がそのデータの利用・外部送信を許可する権限を持つ」と同義ではない。発行鍵、データ所有者/組織の権限、適用規約と必要な情報保護の検証は**別工程**で、現行コードの`organization_identity_verified=false`は維持する。
 - **AWS送受信は引き続き停止**。`require_online_release()` は解除しない。承認検証結果も `external_transfer_authorized=false`。
 
 ## 2. 署名承認の入力契約
 
-社内の機密語・証跡と、承認用の鍵情報を**公開Gitリポジトリの外**に保存する。PoCでは合成鍵をテスト時に一時生成するだけで、実際の承認鍵や秘密鍵は保持しない。
+個人/組織の秘密語・証跡と、承認用の鍵情報を**公開Gitリポジトリの外**に保存する。PoCでは合成鍵をテスト時に一時生成するだけで、実際の承認鍵や秘密鍵は保持しない。
 
 受け入れるデータは以下の4種類。
 
@@ -42,7 +42,7 @@ python .\scripts\verify_attestation_offline.py `
   --out "$env:USERPROFILE\learning-private\attestation-check.json"
 ```
 
-署名検証には `cryptography` が必要（オフラインの他のモジュールは原則標準ライブラリ）。秘密鍵をプロジェクトに保存しない。正式導入では会社が管理する信頼アンカー/署名とSSO・承認ワークフローを別途接続する。
+署名検証には `cryptography` が必要（オフラインの他のモジュールは原則標準ライブラリ）。秘密鍵をプロジェクトに保存しない。正式利用時はデータ所有者や組織が信頼する鍵・本人確認・承認ワークフローを接続し、組織利用では必要に応じSSOも組み込む。
 
 ## 3. A/B/C/Dペア評価の入力契約
 
@@ -67,9 +67,9 @@ python .\scripts\evaluate_arms_offline.py `
 
 結果の `all_four_observed` は4方式に観測値が提出されたことだけを示し、比較結果の優劣や信頼区間の統計的有意性を保証しない。
 
-## 4. 残る外部・企業環境の検証
+## 4. 残る外部・利用環境の検証
 
-- **#6**: 管理者によるEd25519公開鍵の発行/失効/信頼、社内ID本人性と承認範囲、企業DLP、保存先IAM/KMS/Block Public Access/監査、変更不能の証跡、Windows実機、AWS実接続。**このPoCから送信を可能にしない。**
+- **#6**: 管理者によるEd25519公開鍵の発行/失効/信頼、本人/利用主体の確認と承認範囲、必要なDLP（組織利用の場合）、保存先IAM/KMS/Block Public Access/監査、変更不能の証跡、Windows実機、AWS実接続。**このPoCから送信を可能にしない。**
 - **#10**: Memory Episodicの非同期Reflection、AgentRun型独自LLM処理、Hybrid、知識なしDを実際に同一データで走らせるrunner、コスト・セッション証跡、学習/評価の系列単位の漏えい対策、実Copilotの未知タスクでの効果検証。
 - **安全性**: PII/社外秘の自動検査は完全ではない。レビュー担当が見るレポートは原文を含まないが、元のファイルはアクセス制御が必要。
 

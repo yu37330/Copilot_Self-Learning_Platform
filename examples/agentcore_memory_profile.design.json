@@ -3,7 +3,7 @@
   "record_type": "agentcore-memory-design-not-api-request",
   "status": "proposal_not_deployed",
   "external_transfer_authorized": false,
-  "region": "company_approved_region_to_be_verified",
+  "region": "selected_aws_region_to_be_verified",
   "isolation": {
     "resource_per": [
       "project",
@@ -32,7 +32,7 @@
     "long_term_days": 90,
     "long_term_parameter": "recordExpirySpecification.recordExpiryDurationDays",
     "deployment_gate": "verify_target_sdk_and_service_support_and_iam_before_use",
-    "s3_lifecycle": "separate_company_retention_policy"
+    "s3_lifecycle": "data_owner_and_applicable_policy"
   },
   "namespace_templates": {
     "episodes": "/strategy/{memoryStrategyId}/actor/{actorId}/session/{sessionId}/",
@@ -65,5 +65,6 @@
   "preparation_policy": "prepare_all_variants_up_front_execute_in_controlled_order",
   "suite_generator": "scripts/prepare_experiment_suite.py",
   "suite_reference": "docs/full-experiment-suite-20261115.md",
-  "scope_note": "このJSONは設計方針。全構成の準備と全構成の実行完了は異なる。AWS I/O停止を維持。"
+  "scope_note": "これは設計案。個人・チーム・企業を対象とするが、実Copilotログ・実AWS/Memoryの設定/実行・データ送信の認可は未確認。安全ゲート維持。",
+  "audience": "windows_pc_github_copilot_individual_team_organization"
 }
