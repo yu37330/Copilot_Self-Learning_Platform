@@ -6,6 +6,12 @@
 
 13構成の設計プロファイル、共通条件、ケース別のジョブ計画、未実行の観測枠を一括生成できる。これは**実験の準備計画であり、AWS APIリクエストでも、全実行器が完成したという宣言でもない**。AWS/モデル/Copilotへの呼出し、リソース作成、既存台帳の変更はない。既存の外部I/O停止は維持する。
 
+## 現在のRuntimeとの関係（PR #27まで）
+
+単一Runtimeには`custom`、`original_wiki`、`custom_and_original_wiki`、`memory_ingest`、`memory_wiki`、`hybrid`の**6モード**があります。またWikiなしW0、Memory型WM、原本型WOを直交させた**13×3＝39条件の未実行計画**を生成できます。**6モードの合成E2Eと39条件の実評価完了は別物**です。Memoryの有限回自動再照会は追加しましたが、抽出完了の独立証明、全実験runner、結果集計、実費用・実効果は未完成です。D＋W0のみが真の知識なし対照です。
+
+[現在地](current-status-20261115.md)／[Runtime](single-runtime-codezip-20261115.md)／[Memory再開](memory-resume-20261115.md)／[Wiki二方式](wiki-dual-approach-20261115.md)。
+
 ## 最初から準備する13条件
 
 | ID | 内容 | 切り分けたい効果 |

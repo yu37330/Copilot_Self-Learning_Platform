@@ -1,3 +1,5 @@
+> **履歴資料としての注意（2026-11-15追記）**：以下は2026-11-14時点のPoC v0.3との比較です。本文の「知識台帳・検索・S3 Version ID・自動起動が未実装」等は**当時の記録**で、現在の機能一覧ではありません。現在は知識台帳・検索、単一CodeZip Runtime、S3 ready→Lambda、Memory待ち再開、OKF Wikiを実装しています（実AWSは未検証）。現在の正本は[現状](current-status-20261115.md)と[最新構成](architecture.md)。AgentRun本体を導入したわけではありません。
+
 # AgentRun と Copilot Self-Learning Platform の実装・処理フロー比較
 
 更新: 2026-11-15  

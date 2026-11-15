@@ -4,6 +4,12 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 
 > **AWS実送受信・モデル呼出しは停止中です。** `-Upload` / `--execute` / `--use-bedrock` では解除できません。署名検証機能があっても、会社の認証・DLPとの実統合が済んだ意味ではありません。Copilotへの自動インストールも行いません。
 
+## 最新の構成・ドキュメント
+
+**2026-11-15 / PR #27まで：単一CodeZip Runtime、S3 ready→Lambda起動とMemory待ち自動再開のコードを実装しています。** Managed Harnessは不採用。AWS実デプロイ・社内承認済みオンライン実行は未実施です。
+
+[**現状・残課題**](docs/current-status-20261115.md) → [**最新アーキテクチャ**](docs/architecture.md) → [**Runtime/CodeZip**](docs/single-runtime-codezip-20261115.md) → [**Memory再開**](docs/memory-resume-20261115.md)。比較は [39条件の準備計画](docs/full-experiment-suite-20261115.md)、Wikiは [OKF v0.2](docs/okf-wiki-20261115.md) に整理しました。
+
 ## 現在の実装範囲
 
 | 範囲 | 状態 |
@@ -68,7 +74,7 @@ python .\scripts\prepare_sessions.py --session "<確認したID>" --out "$env:US
 
 ## 設計・検証資料
 
-- [全体構成](docs/architecture.md) / [オフライン学習処理](docs/offline-pipeline.md) / [AgentRunとの詳細比較](docs/agentrun-process-comparison-20261115.md)
+- [現在地・残課題](docs/current-status-20261115.md) / [最新全体構成](docs/architecture.md) / [オフライン学習処理](docs/offline-pipeline.md) / [AgentRunとの歴史的比較](docs/agentrun-process-comparison-20261115.md)
 - [レビュー修正](docs/review-response-20261114.md) / [知識台帳・検索](docs/offline-improvements-20261115.md)
 - [送信前検証・共通評価](docs/preflight-eval-hardening-20261115.md) / [検索品質評価](docs/retrieval-evals-20261115.md)
 - [確定バンドル・意味レビュー](docs/frozen-bundle-and-semantic-gate-20261115.md) / [機密検査・適用範囲評価](docs/privacy-semantic-holdout-20261115.md)

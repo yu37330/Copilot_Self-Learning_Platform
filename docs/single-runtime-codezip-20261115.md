@@ -36,6 +36,7 @@ Copilot履歴をローカルで選別・承認
 | `runtime_service/aws_adapters.py` | 版指定S3、サービスchecksum付きPUT、DynamoDB CAS、Bedrock、Memoryページング |
 | `runtime_service/pipeline.py` | 既存処理の統合、checkpoint、独立したWikiモデル、OKF出力、完了manifest |
 | `lambda_function.py` / `runtime_service/trigger.py` | S3イベントの検査・Runtime起動。結果ファイルで再起動しない |
+| `runtime_service/resume.py` | WAITING_MEMORYのGSI検出・条件付き予約・有限回再開（PR #27） |
 | `scripts/build_runtime_zip.py` | 固定依存を同梱する再現可能ZIP。通信・デプロイなし |
 | `infra/single-runtime.yaml` | 1 Runtime、1 Lambda、S3、DynamoDB、失敗通知キュー、IAMのCloudFormation定義 |
 
@@ -53,7 +54,7 @@ Python標準ライブラリのHTTPサーバーを使用し、AWSが許容する 
 
 CreateEvent受領は記憶抽出の完了ではない。各イベントの安定clientTokenと受領checkpointを保存する。次に、全ページ・指定戦略・指定namespaceの結果を取得する。0件、一部戦略欠落、観測が変動中なら `WAITING_MEMORY` とし、明示retryで再開する。
 
-連続して同じレコード集合を観測しても、全ての非同期抽出/Reflectionが完了した証明にはならない。そのため完了レポートとMemory状態レコードに `memory_extraction_complete=false`／`extraction_complete=false`、`complete_for_comparison=false` を残す。現在の既定pollは3回/5秒間隔の小規模接続確認向け。待機ジョブの自動スケジューラは今回追加していない。
+連続して同じレコード集合を観測しても、全ての非同期抽出/Reflectionが完了した証明にはならない。そのため完了レポートとMemory状態レコードに `memory_extraction_complete=false`／`extraction_complete=false`、`complete_for_comparison=false` を残す。現在の既定pollは3回/5秒間隔の小規模接続確認向け。**PR #27でEventBridge Scheduler→同じLambda→同じRuntimeの有限回自動再開を追加済み**です。ただしSchedulerは既定DISABLED／EnableMemoryResume=falseで、Memory抽出完了の証拠にはなりません。詳細: [Memory再開](memory-resume-20261115.md)。
 
 AWSの `ListMemoryExtractionJobs` / `StartMemoryExtractionJob` は失敗した抽出の再処理用であり、一般の全抽出完了確認APIとして使用していない。実比較には、専用Memory/学習範囲と完了を確認したexportの固定・検収が依然必要。
 
@@ -99,7 +100,7 @@ python .\main.py --port 18080
 - 新規64テスト: 六つのモード、Lambda→Runtime→OKF、actual localhost HTTP、重複/改変/途中再開、SDK引数形、checksum、ページング、CodeZip自己完結import、production外部通信拒否。
 - 依存同梱ZIPをLinux x86_64/Python3.13.5の `-I -S`（site-packagesを使わない）で実起動。/ping 200、/invocations 503を確認。8080が使用中のためローカルsmokeだけ別port。AWSでの既定は8080。
 - 六モードの合成E2Eを実行。実AWS/Memory/LLM呼出しとGitHub Actions実行は0。
-- AWS ARM64/AL2023での起動、CloudFormation実デプロイ、会社認証/DLPの統合、実Memory完了・性能比較、39条件全体の実行器、Runtime間の集計/自動再開/実Copilotは未検証または未実装。Issue #25と関連IssueはOPENのまま。
+- **PR #27でMemory待ち自動再開コードを追加済み**（関連98件の合成テストPASS）。AWS ARM64/AL2023起動、CloudFormation実デプロイ、会社認証/DLP、実Memory抽出完了・実性能比較、39条件全体のrunner、実Copilotは未検証または未実装。Issue #25と関連IssueはOPENのまま。
 
 ## 一次仕様（2026-11-15確認）
 
