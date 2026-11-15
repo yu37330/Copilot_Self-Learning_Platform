@@ -74,9 +74,26 @@ def lambda_handler(event, context):
     sdk = boto3.Session(region_name=settings.region)
     config = Config(connect_timeout=5, read_timeout=30, retries={"mode": "standard", "total_max_attempts": 2})
     try:
+        if isinstance(event, dict) and event.get("action") == "resume_memory_waits":
+            from .resume import EVENT, ResumeLedger, dispatch_due
+            if event != EVENT:
+                fail("INVALID_RESUME_EVENT")
+            if os.environ.get("ENABLE_MEMORY_RESUME", "false") != "true":
+                return {"status": "MEMORY_RESUME_DISABLED", "processing_complete": False}
+            # 定期再開はSDK内再試行を重ねず、永続台帳の次回期限で再確認する。
+            resume_config = Config(connect_timeout=5, read_timeout=15,
+                                   retries={"mode": "standard", "total_max_attempts": 1})
+            ledger = ResumeLedger(sdk.resource("dynamodb", config=resume_config).Table(os.environ["JOB_TABLE"]), settings)
+            result = dispatch_due(event, settings, ledger, sdk.client("bedrock-agentcore", config=resume_config),
+                                  runtime_arn=os.environ["RUNTIME_ARN"],
+                                  qualifier=os.environ.get("RUNTIME_QUALIFIER", "DEFAULT"),
+                                  remaining_ms=context.get_remaining_time_in_millis)
+            # 本文・S3キー・Memory IDを出さず、運用上必要な件数だけCloudWatchへ残す。
+            print(json_bytes({"event": "memory_resume_tick", **result}).decode("utf-8"))
+            return result
         return dispatch(event, settings, S3Store(sdk.client("s3", config=config), settings),
                         sdk.client("bedrock-agentcore", config=config), runtime_arn=os.environ["RUNTIME_ARN"],
                         qualifier=os.environ.get("RUNTIME_QUALIFIER", "DEFAULT"))
     except Exception:
         # Lambdaの再試行・DLQに渡すが、S3キーや入力内容を例外メッセージに含めない。
-        raise RuntimeError("S3_RUNTIME_DISPATCH_FAILED") from None
+        raise RuntimeError("RUNTIME_DISPATCH_FAILED") from None

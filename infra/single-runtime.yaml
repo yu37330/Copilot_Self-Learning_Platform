@@ -50,7 +50,13 @@ Parameters:
     AllowedValues: ['true', 'false']
     Default: 'false'
     Description: Enabling notifications does NOT remove the code-level online safety gate.
+  EnableMemoryResume:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Resume WAITING_MEMORY only. Does NOT release the code-level online safety gate.
 Conditions:
+  MemoryResumeEnabled: !Equals [!Ref EnableMemoryResume, 'true']
   MemoryAccess: !Equals [!Ref EnableMemoryAccess, 'true']
   TriggerEnabled: !Equals [!Ref EnableS3Trigger, 'true']
 Resources:
@@ -60,8 +66,17 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions: [{AttributeName: job_id, AttributeType: S}]
+      AttributeDefinitions:
+        - {AttributeName: job_id, AttributeType: S}
+        - {AttributeName: resume_queue, AttributeType: S}
+        - {AttributeName: resume_due_at, AttributeType: N}
       KeySchema: [{AttributeName: job_id, KeyType: HASH}]
+      GlobalSecondaryIndexes:
+        - IndexName: memory-resume-due-v1
+          KeySchema:
+            - {AttributeName: resume_queue, KeyType: HASH}
+            - {AttributeName: resume_due_at, KeyType: RANGE}
+          Projection: {ProjectionType: KEYS_ONLY}
       PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: true}
       SSESpecification: {SSEEnabled: true}
   DispatchFailures:
@@ -159,6 +174,12 @@ Resources:
                 Action: bedrock-agentcore:InvokeAgentRuntime
                 Resource: !GetAtt LearningRuntime.AgentRuntimeArn
               - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+                Resource: !GetAtt Jobs.Arn
+              - Effect: Allow
+                Action: dynamodb:Query
+                Resource: !Sub '${Jobs.Arn}/index/memory-resume-due-v1'
+              - Effect: Allow
                 Action: sqs:SendMessage
                 Resource: !GetAtt DispatchFailures.Arn
               - Effect: Allow
@@ -185,9 +206,51 @@ Resources:
           RUNTIME_REGION: !Ref 'AWS::Region'
           DATA_KMS_KEY_ARN: !Ref DataKmsKeyArn
           RUNTIME_ARN: !GetAtt LearningRuntime.AgentRuntimeArn
+          JOB_TABLE: !Ref Jobs
+          ENABLE_MEMORY_RESUME: !Ref EnableMemoryResume
+          SENSITIVE_LITERALS_JSON: !Ref SensitiveLiteralsJson
           RUNTIME_QUALIFIER: DEFAULT
           ALLOWED_MODEL_IDS: !Ref AllowedModelIds
           MEMORY_PROFILES_JSON: !Ref MemoryProfilesJson
+  ResumeScheduleGroup:
+    Type: AWS::Scheduler::ScheduleGroup
+  ResumeSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: scheduler.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref 'AWS::AccountId'}
+              ArnEquals: {aws:SourceArn: !GetAtt ResumeScheduleGroup.Arn}
+      Policies:
+        - PolicyName: resume-trigger-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt Trigger.Arn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt DispatchFailures.Arn
+  MemoryResumeSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      GroupName: !Ref ResumeScheduleGroup
+      Description: Bounded Memory wait checks through the existing trigger Lambda.
+      ScheduleExpression: rate(1 minute)
+      FlexibleTimeWindow: {Mode: 'OFF'}
+      State: !If [MemoryResumeEnabled, ENABLED, DISABLED]
+      Target:
+        Arn: !GetAtt Trigger.Arn
+        RoleArn: !GetAtt ResumeSchedulerRole.Arn
+        Input: '{"schema_version":"memory-resume-1","action":"resume_memory_waits"}'
+        RetryPolicy: {MaximumEventAgeInSeconds: 300, MaximumRetryAttempts: 0}
+        DeadLetterConfig: {Arn: !GetAtt DispatchFailures.Arn}
   TriggerPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -241,3 +304,5 @@ Outputs:
   InputReadyPrefix: {Value: !Sub 's3://${DataBucketName}/inputs/ready/'}
   ResultPrefix: {Value: !Sub 's3://${DataBucketName}/results/'}
   DispatchFailureQueue: {Value: !Ref DispatchFailures}
+
+  MemoryResumeScheduleArn: {Value: !GetAtt MemoryResumeSchedule.Arn}

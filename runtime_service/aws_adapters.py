@@ -233,7 +233,8 @@ def production(settings: Settings):
     from botocore.config import Config
     sdk = boto3.Session(region_name=settings.region)
     config = Config(connect_timeout=5, read_timeout=90, retries={"mode": "standard", "total_max_attempts": 2})
+    from .resume import ResumeLedger
     return (S3Store(sdk.client("s3", config=config), settings),
-            DynamoLedger(sdk.resource("dynamodb", config=config).Table(__import__("os").environ["JOB_TABLE"]), settings),
+            ResumeLedger(sdk.resource("dynamodb", config=config).Table(__import__("os").environ["JOB_TABLE"]), settings),
             Models(sdk.client("bedrock-runtime", config=config), settings),
             Memory(sdk.client("bedrock-agentcore", config=config), sdk.client("bedrock-agentcore-control", config=config)))
