@@ -1,6 +1,6 @@
 # 単一RuntimeのMemory待ちを有限回再開する
 
-対象: Issue #25 / #2 / #6。PR #26を基準にした追加実装。AWSへのデプロイも、実送信の許可もしていない。
+**更新: 2026-11-15 / [PR #27](https://github.com/yu37330/Copilot_Self-Learning_Platform/pull/27)をmainへマージ済み。** PR #26を基準にしたコード・合成テストです。AWSへのデプロイ・実送信・Scheduler有効化はしていません。対象: Issue #25 / #2 / #6。[最新状況](current-status-20261115.md)。
 
 ## 問題と変更
 
