@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "record_type": "wiki-design-not-api-request",
+  "status": "prepared_offline_not_deployed",
+  "variants": {
+    "W0": {"wiki": false},
+    "WM": {
+      "wiki": true,
+      "source": "frozen_agentcore_memory_export",
+      "strategies": ["semantic", "episodic"],
+      "namespace_scope": "project_and_pseudonymous_actor",
+      "preserve": ["memoryRecordId", "memoryStrategyId", "namespaces", "record_sha256"],
+      "wiki_editor": "application_compiler_optional_agentcore_runtime",
+      "raw_evidence_verified": false
+    },
+    "WO": {
+      "wiki": true,
+      "source": "same_approved_raw_documents",
+      "agentcore_memory_used": false,
+      "wiki_editor": "independent_pipeline_same_editor_model_as_WM"
+    }
+  },
+  "common": {
+    "output": "markdown_claims_citations_links_revision",
+    "editor_prompt": "copilot_learning.wiki.wiki_prompt",
+    "review": "manual_review_required",
+    "originals": "never_overwritten",
+    "context_budget": "shared_with_direct_memory_not_added",
+    "evaluation_updates": false,
+    "true_no_knowledge_control": "D+W0",
+    "D_plus_wiki": "wiki_only_not_no_knowledge",
+    "construction_cost": "report_separately_from_queries"
+  },
+  "live_execution_ready": false,
+  "external_transfer_authorized": false
+}
