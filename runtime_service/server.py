@@ -47,6 +47,14 @@ class JobService:
             if not claimed:
                 self.slots.release()
                 return 200, self.summary(row, jid)
+            # 本番台帳は不変な再開要求を保存。旧オフライン台帳は従来どおり利用可能。
+            binder = getattr(self.ledger, "bind_request", None)
+            if binder is not None:
+                try:
+                    row = binder(row, value)
+                except Exception:
+                    self.ledger.finish(row, "FAILED", "RESUME_BINDING_REJECTED")
+                    raise
             with self.lock:
                 self.running += 1
             try:

@@ -89,3 +89,9 @@ python .\main.py --port 18080
 ```
 
 `/ping`は起動確認、`/invocations`のproduction経路は安全レビュー前のため503になります。ローカル合成デモはテスト専用アダプターを使います。コードがあることを社内運用承認とは扱いません。[構成・モード・入力・再開・ZIP配備手順・未完了事項](docs/single-runtime-codezip-20261115.md)を参照してください。
+
+## Memory待ちの有限回自動再開
+
+単一Runtimeと同じ起動Lambdaを維持し、`WAITING_MEMORY`だけを定期点検するコードを追加しました。次回時刻・回数・総待ち時間を台帳で管理し、設定変更や上限超過は`RECOVERY_REQUIRED`で停止します。起動応答が失われても状態を巻き戻さず、既存checkpointを使います。
+
+CloudFormationの`EnableMemoryResume`は既定`false`で、SchedulerもDISABLEDです。AWS実送信停止の解除・デプロイは実施していません。Memoryの抽出完了や実学習品質を認定する機能ではありません。[仕様・制約・検証](docs/memory-resume-20261115.md)
