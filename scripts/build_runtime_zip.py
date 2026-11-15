@@ -69,7 +69,8 @@ def build(destination: Path) -> dict:
     if out.exists():
         raise InvalidData("既存ZIPを上書きしません")
     files, manifest = payloads_from_installed()
-    sources = [ROOT / "main.py", ROOT / "lambda_function.py"]
+    # MITライセンスの表示は、コードを再配布するCodeZipにも必ず含める。
+    sources = [ROOT / "main.py", ROOT / "lambda_function.py", ROOT / "LICENSE"]
     sources += [ROOT / "copilot_learning" / (name + ".py") for name in MODULES]
     sources += sorted((ROOT / "runtime_service").glob("*.py"))
     for source in sources:
