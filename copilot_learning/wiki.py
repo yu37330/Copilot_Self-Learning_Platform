@@ -439,7 +439,7 @@ def query_wiki(revision: dict[str, Any], current_sources: dict[str, Any], query:
     return sorted(rows, key=lambda r: (-r["score"], r["page_id"]))[:limit]
 
 
-def _render(page: dict[str, Any]) -> bytes:
+def _render_legacy(page: dict[str, Any]) -> bytes:
     # 任意リンクやHTMLを知識本文から実行しない。リンクは検査済みpage_idだけ。
     def quote(text):
         return "\n".join("> " + html.escape(line).replace("[", "&#91;").replace("]", "&#93;")
@@ -454,26 +454,42 @@ def _render(page: dict[str, Any]) -> bytes:
     return ("\n\n".join(chunks) + "\n").encode("utf-8")
 
 
+def _payloads(revision: dict[str, Any], *, legacy: bool = False) -> tuple[dict[str, bytes], dict[str, Any]]:
+    """旧版は検証専用。新規のWM/WOは共通OKFレンダラーを使う。"""
+    from .okf import VERSION, RENDERER, SPEC_COMMIT, render_wiki_payloads
+    if legacy:
+        payloads = {page["page_id"] + ".md": _render_legacy(page) for page in revision["pages"]}
+        payloads["wiki.json"] = json_bytes(revision)
+    else:
+        payloads = render_wiki_payloads(revision)
+    manifest = {"record_type": "offline-wiki-files" if legacy else "offline-wiki-okf-files",
+                "revision_sha256": digest(json_bytes(revision)),
+                "files": {name: digest(body) for name, body in payloads.items()},
+                "external_transfer_authorized": False}
+    if not legacy:
+        manifest.update(okf_version=VERSION, renderer_version=RENDERER, spec_commit=SPEC_COMMIT)
+    return payloads, manifest
+
+
 def export_wiki(revision: dict[str, Any], destination: Path) -> dict[str, Any]:
-    """各版を新規フォルダに保存する。公開・配布・既存版への上書きはしない。"""
+    """両方式のWikiをOKF v0.2として新規フォルダへ保存。公開・配布はしない。"""
     _validate_revision(revision)
     out = _path(destination)
     assert_external_output(out, ROOT)
     if out.exists() or any(p.rstrip(" .").casefold() in RESERVED for p in out.parts):
         _fail()
-    payloads = {page["page_id"] + ".md": _render(page) for page in revision["pages"]}
-    payloads["wiki.json"] = json_bytes(revision)
-    manifest = {"record_type": "offline-wiki-files", "revision_sha256": digest(json_bytes(revision)),
-                "files": {name: digest(body) for name, body in payloads.items()},
-                "external_transfer_authorized": False}
+    payloads, manifest = _payloads(revision)
     payloads["manifest.json"] = json_bytes(manifest)
     out.parent.mkdir(parents=True, exist_ok=True)
     _path(out.parent)
     out.mkdir(mode=0o700)
-    created = []
+    created, directories = [], []
     try:
         for name, data in payloads.items():
-            target = out / name
+            target = _path(out / name)
+            if target.parent != out and not target.parent.exists():
+                target.parent.mkdir(mode=0o700)
+                directories.append(target.parent)
             with target.open("xb") as handle:
                 created.append(target)
                 handle.write(data)
@@ -483,15 +499,41 @@ def export_wiki(revision: dict[str, Any], destination: Path) -> dict[str, Any]:
     except BaseException:
         for target in reversed(created):
             target.unlink()
+        for directory in reversed(directories):
+            directory.rmdir()
         out.rmdir()
         raise
-    return {"status": "wiki_draft_written", "manifest_sha256": digest(json_bytes(manifest)),
+    return {"status": "wiki_draft_written", "format": "okf", "okf_version": "0.2",
+            "manifest_sha256": digest(json_bytes(manifest)),
             "revision_sha256": manifest["revision_sha256"], "network_calls": 0}
 
 
-def verify_wiki(directory: Path, snapshot: dict[str, Any], *, expected_manifest_sha256: str,
-                sensitive_literals: list[str]) -> dict[str, Any]:
-    """独立保管ハッシュと現在の出典から同じページを再構築し、保存版を確認する。"""
+def _files_in(directory: Path, prefix: str = "", depth: int = 0) -> tuple[set[str], set[str]]:
+    """ファイルだけでなく予期しないフォルダ・リンクも検知する。外部パスは辿らない。"""
+    if depth > 1:
+        _fail()
+    files, directories = set(), set()
+    entries = list(directory.iterdir())
+    if len(entries) > 512:
+        _fail()
+    for path in entries:
+        _path(path)
+        name = prefix + path.name
+        if path.is_file():
+            files.add(name)
+        elif path.is_dir():
+            directories.add(name)
+            nested_files, nested_dirs = _files_in(path, name + "/", depth + 1)
+            files.update(nested_files)
+            directories.update(nested_dirs)
+        else:
+            _fail()
+    return files, directories
+
+
+def _verified_revision(directory: Path, snapshot: dict[str, Any], *, expected_manifest_sha256: str,
+                       sensitive_literals: list[str]) -> tuple[dict[str, Any], bool]:
+    """検証した同一revisionを返す。移行時に検証後の別ファイルを再読込しない。"""
     out = _path(directory)
     assert_external_output(out, ROOT)
     _sha(expected_manifest_sha256)
@@ -499,25 +541,49 @@ def verify_wiki(directory: Path, snapshot: dict[str, Any], *, expected_manifest_
     manifest = read_json(manifest_path)
     if digest(manifest_path.read_bytes()) != expected_manifest_sha256:
         _fail()
+    kind = manifest.get("record_type")
+    if kind not in {"offline-wiki-files", "offline-wiki-okf-files"}:
+        _fail()
+    legacy = kind == "offline-wiki-files"
     revision = read_json(out / "wiki.json")
     _validate_revision(revision)
     rebuilt = compile_wiki(snapshot, {"source_snapshot_sha256": revision["source_snapshot_sha256"],
                                      "pages": revision["pages"]},
                            sensitive_literals=sensitive_literals, generator=revision["generator"])
-    # 親版の実在証明ではない。独立保管manifestで固定された履歴参照を保持する。
+    # 独立保管manifestで固定された親参照を維持する。親版の存在証明ではない。
     rebuilt["parent_sha256"] = revision["parent_sha256"]
     if json_bytes(rebuilt) != json_bytes(revision):
         _fail()
-    expected = {page["page_id"] + ".md": _render(page) for page in revision["pages"]}
-    expected["wiki.json"] = json_bytes(revision)
-    wanted = {"record_type": "offline-wiki-files", "revision_sha256": digest(json_bytes(revision)),
-              "files": {name: digest(data) for name, data in expected.items()},
-              "external_transfer_authorized": False}
-    if manifest != wanted or {p.name for p in out.iterdir()} != set(expected) | {"manifest.json"}:
+    expected, wanted = _payloads(revision, legacy=legacy)
+    expected_dirs = {str(Path(name).parent).replace("\\", "/") for name in expected
+                     if Path(name).parent != Path(".")}
+    actual_files, actual_dirs = _files_in(out)
+    if (manifest != wanted or actual_files != set(expected) | {"manifest.json"}
+            or actual_dirs != expected_dirs):
         _fail()
     for name, data in expected.items():
         path = _path(out / name)
         if not path.is_file() or path.stat().st_size != len(data) or path.read_bytes() != data:
             _fail()
-    return {"status": "verified_wiki_draft", "revision_sha256": wanted["revision_sha256"],
+    return revision, legacy
+
+
+def verify_wiki(directory: Path, snapshot: dict[str, Any], *, expected_manifest_sha256: str,
+                sensitive_literals: list[str]) -> dict[str, Any]:
+    """旧形式とOKFを区別し、現在の出典から再構築する。検証は採用許可ではない。"""
+    revision, legacy = _verified_revision(directory, snapshot, expected_manifest_sha256=expected_manifest_sha256,
+                                          sensitive_literals=sensitive_literals)
+    return {"status": "verified_wiki_draft", "revision_sha256": digest(json_bytes(revision)),
+            "format": "legacy" if legacy else "okf", "okf_version": None if legacy else "0.2",
             "lint": lint_wiki(revision, snapshot), "approved_for_copilot": False, "network_calls": 0}
+
+
+def migrate_wiki_to_okf(directory: Path, snapshot: dict[str, Any], destination: Path, *,
+                        expected_manifest_sha256: str, sensitive_literals: list[str]) -> dict[str, Any]:
+    """検証済み旧版/OKFを別フォルダへ出力。原本・旧版・採否状態を変更しない。"""
+    revision, _ = _verified_revision(directory, snapshot, expected_manifest_sha256=expected_manifest_sha256,
+                                     sensitive_literals=sensitive_literals)
+    source, target = _path(directory), _path(destination)
+    if target == source or source in target.parents:
+        _fail()
+    return export_wiki(revision, target)
