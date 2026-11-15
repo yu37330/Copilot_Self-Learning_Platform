@@ -216,6 +216,12 @@ class PackageTests(unittest.TestCase):
             with zipfile.ZipFile(a) as z:
                 self.assertIn("main.py",z.namelist());self.assertIn("lambda_function.py",z.namelist())
                 self.assertIn("boto3/__init__.py",z.namelist())
+                # CodeZipを再配布する場合にも、プロジェクト本体のMIT表示が必要。
+                self.assertIn("LICENSE",z.namelist())
+                self.assertEqual(z.read("LICENSE"),(ROOT/"LICENSE").read_bytes())
+                self.assertIn(b"MIT License",z.read("LICENSE"))
+                embedded_manifest=json.loads(z.read("BUILD-MANIFEST.json"))
+                self.assertEqual(embedded_manifest["files"]["LICENSE"],digest(z.read("LICENSE")))
                 self.assertFalse(any(n.endswith((".so",".pyd",".pyc")) for n in z.namelist()))
                 self.assertFalse(any(n.startswith(("tests/","examples/")) for n in z.namelist()))
                 self.assertTrue(all((i.external_attr>>16)&0o777 == (0o755 if i.is_dir() else 0o644) for i in z.infolist()))
