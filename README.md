@@ -28,6 +28,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり本人/組織による正式承認ではない |
 | A/B/C/Dの共通・ペア比較と検索評価 | 評価器を実装。実サービスを走らせた比較ではない |
 | Skillプレビューの出力・再検証 | 実装。既存のSkills/Instructionsに書き込まない |
+| セッション振り返り・指示改善の候補表示 | Issue #31のオフライン初期版。規則ベースの根拠付きプレビューのみ。実Copilotログ・改善効果は未検証 |
 | WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。Runtimeのモデル呼出経路は実装、実LLMは未検証 |
 | 単一Runtime（CodeZip）・S3起動Lambda | HTTP入口、既存処理の統合、依存同梱ZIP、CFN定義・モック結合検証。AWS実デプロイ未実施 |
 | Copilotへの動的注入・Workflow実行 | 未実装 |
@@ -76,6 +77,16 @@ python .\scripts\validate_okf_offline.py --directory "$env:USERPROFILE\okf-wiki-
 出力は`SKILL.preview.md`と`manifest.json`だけです。`SKILL.md`へ自動改名せず、Copilotの自動読込先にも配置しません。確認時にはハッシュと現在の台帳状態を再照合します。Markdownだけで実Copilotの権限を制御できるわけではありません。
 
 [使い方・export/verify・制約](docs/skill-preview-20261115.md)
+
+## Session Retrospective：指示ファイル・Skills改善の候補（Issue #31）
+
+既存の検証済みセッションZIPから、ユーザーの明示的な訂正、繰り返し指示、役割分担の誤解、ツール失敗等をオフラインで分析します。改善先としてAGENTS.md、Copilot instructions、Skills、custom agents、普段のプロンプト、テストの**検討候補**を挙げます。実際の指示ファイルは変更せず、元セッションの文章も出力しません。Chronicle連携・LLMによる原因推定はまだありません。
+
+```powershell
+python .\scripts\session_retro_offline.py --staging "$env:USERPROFILE\copilot-learning-staging" --fingerprint "<64桁SHA>" --out "$env:USERPROFILE\copilot-retro-preview-01"
+```
+
+結果はretrospective.preview.json、RETROSPECTIVE.preview.md、manifest.jsonです。独立保管したmanifest SHAを使った `--verify` にも対応。Git管理外の新規出力先のみ許可し、自動適用は行いません。詳細は[使用方法・制約・今後の実装](docs/session-retro-20261119.md)。合成回帰テストのみ完了し、実Copilotセッション形式への適合性は未検証です。
 
 ## セッションのローカル準備
 
