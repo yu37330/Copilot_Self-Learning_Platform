@@ -442,3 +442,52 @@ def verify_review(sessions: list[dict[str, Any]], root: Path, policy: Path,
             raise InvalidData("プレビューの内容・指示の版または提案が一致しません")
     return {"status": "verified_review_only", "changes_applied": False,
             "approved_for_copilot": False, "network_calls": 0}
+
+
+def export_review_request(sessions: list[dict[str, Any]], root: Path,
+                          policy: Path, destination: Path) -> dict[str, Any]:
+    """モデル呼び出しなしのレビュー要求を、Git管理外の新規フォルダに保存する。"""
+    terms, policy_sha = load_policy(_path(policy))
+    inventory = instruction_inventory(root, terms["sensitive_literals"])
+    request = review_request(sessions, inventory)
+    body = json_bytes(request)
+    if len(body) > MAX_OUTPUT_BYTES:
+        raise InvalidData("レビュー要求が容量上限を超えています")
+    manifest = {
+        "schema_version": "1.0", "record_type": "offline-retro-review-request-manifest",
+        "version": VERSION, "request_sha256": digest(body),
+        "inventory_sha256": digest(json_bytes(inventory)),
+        "policy_sha256": policy_sha,
+        "status": "offline_request_only_no_model_invocation",
+        "approved_for_copilot": False, "external_transfer_authorized": False,
+        "network_calls": 0,
+    }
+    out = _output_path(destination)
+    repo = _safe_repo(root)
+    if out == repo or repo in out.parents:
+        raise InvalidData("分析したリポジトリにレビュー要求を保存できません")
+    if out.exists():
+        raise InvalidData("既存フォルダを上書きできません")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    _path(out.parent)
+    out.mkdir(mode=0o700)
+    created: list[Path] = []
+    try:
+        for name, data in (("reviewer-request.preview.json", body),
+                           (MANIFEST_FILE, json_bytes(manifest))):
+            target = out / name
+            with target.open("xb") as handle:
+                created.append(target)
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            target.chmod(0o400)
+    except BaseException:
+        for file in reversed(created):
+            file.chmod(0o600)
+            file.unlink()
+        out.rmdir()
+        raise
+    return {"status": "review_request_written_no_model_invocation",
+            "request_sha256": digest(body), "manifest_sha256": digest(json_bytes(manifest)),
+            "network_calls": 0}
