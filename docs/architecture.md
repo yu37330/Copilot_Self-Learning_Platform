@@ -66,3 +66,19 @@ Memory待ちはGSIの候補を本体の強整合読取で再確認し、revision
 `require_online_release()`はAWS実送受信を無条件停止します。フラグでは解除不可。公開Gitへ個人/組織の非公開セッション・承認履歴・鍵・機密辞書を保存しません。ARM64/AL2023実起動、CFN/IAM/KMS、Scheduler/GSI/S3通知の実動作、実LLM/Memory/Copilot、利用形態に応じた認証/情報保護（組織利用ではSSO/DLP等）は未検証です。Wikiは`draft`、`approved_for_copilot=false`で、39条件runner/費用実測/安全なCopilot自動適用も未完成です。
 
 次に読む資料: [現在地](current-status-20261115.md)、[Runtime/CodeZip](single-runtime-codezip-20261115.md)、[Memory再開](memory-resume-20261115.md)、[比較実験](full-experiment-suite-20261115.md)、[Wiki/OKF](okf-wiki-20261115.md)。
+
+## 追記（2026-11-19、Issue #31）：オフライン指示改善プレビュー
+
+既存の単一CodeZip Runtimeに新たなネットワーク処理を追加せず、ローカルの保存・正規化処理を再利用する独立分析経路を用意した。
+
+~~~text
+prepare_sessions.py の検証済みZIP/manifest
+    → core.read_archive / core.normalize_events
+    → session_retro.analyze_sessions（既知の兆候7種類）
+    → Git管理外の新規ディレクトリにpreview JSON/Markdown/manifest
+    → 人手確認・verify_preview（Copilot設定は変更しない）
+~~~
+
+これは既存のSkillプレビュー/Knowledge Store/Runtime処理とは分離した**提案候補の検出**である。既存のセッション出典ID・archive SHAを保持し、原文はプレビューへ転載しない。Phase BでのLLMによる根本原因分析、AGENTS.md等の実差分生成、既存指示との矛盾検査、Phase Cでのheld-out比較は未実装である。
+
+[使用方法・制限・合成テスト](session-retro-20261119.md)。
