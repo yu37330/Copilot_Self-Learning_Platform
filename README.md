@@ -28,7 +28,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり本人/組織による正式承認ではない |
 | A/B/C/Dの共通・ペア比較と検索評価 | 評価器を実装。実サービスを走らせた比較ではない |
 | Skillプレビューの出力・再検証 | 実装。既存のSkills/Instructionsに書き込まない |
-| セッション振り返り・指示改善 | Issue #31 Phase A: 兆候抽出、Phase B: 指示改善diffのオフライン独立検査、Phase C: 変更前後の未学習タスク比較・費用/手戻りの提出済み観測集計。実Copilotログ・LLM・改善効果は未検証 |
+| セッション振り返り・指示改善 | Phase A/B/Cのオフライン処理に加え、知識系/Retrospective共通の生成・独立レビュー契約を追加。モデル応答は手動JSONのSHA束縛再生のみ。実Copilot・実LLM・改善効果は未検証 |
 | WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。Runtimeのモデル呼出経路は実装、実LLMは未検証 |
 | 単一Runtime（CodeZip）・S3起動Lambda | HTTP入口、既存処理の統合、依存同梱ZIP、CFN定義・モック結合検証。AWS実デプロイ未実施 |
 | Copilotへの動的注入・Workflow実行 | 未実装 |
@@ -97,6 +97,16 @@ python .\scripts\instruction_review_offline.py request --staging "$env:USERPROFI
 ```
 
 続く手動提案作成、gradeによるdiff出力、verifyによる版固定の再検証は[Phase B手順](docs/instruction-review-phase-b-20261119.md)を参照してください。WindowsのCRLFの検査、危険指示・出典不一致の拒否、Git管理外出力の制限を追加しています。すべてオフラインの合成データによる検証であり、実際の品質改善の立証ではありません。
+
+### Issue #31：2系統共通の生成・独立評価モデル契約（2026-11-20）
+
+知識学習系とSession Retrospectiveの両方に、**生成用と評価用の異なるモデルID**を渡す共通JSONインターフェースを追加しました。現時点ではローカルの事前作成済みJSON応答をsystem+promptのSHAに紐づけて検査・再生するだけで、**実LLMは呼び出していません**。Session Retrospectiveでは元の兆候と指示一覧SHAから改善案を検査し、独立評価がhold/rejectならdiffを抑止します。agreeでも自動承認されません。従来の知識候補生成・Gradeも共通契約からオフライン再生できます。
+
+```powershell
+python .\scripts\dual_track_review_offline.py generator-request --staging "$env:USERPROFILE\copilot-staging" --fingerprint "<64桁fingerprint>" --repo "C:\path\to\target" --policy "$env:USERPROFILE\copilot-private\policy.json" --out "$env:USERPROFILE\copilot-private\dual-generator-request-01"
+```
+
+レビュー用リクエストの作成、別途得た2つのモデル応答のオフライン検査、diffプレビュー作成は[二重モデル評価ガイド](docs/dual-track-independent-model-review-20261120.md)を参照。モデル名の文字列だけでは実モデルが動作した証明にならず、外部API接続と実セッションの意味的な品質評価は引き続き未完成です。
 
 ### Issue #31 Phase C：指示改善の効果を未学習タスクで比較
 
