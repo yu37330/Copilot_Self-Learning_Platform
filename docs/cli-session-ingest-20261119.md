@@ -53,6 +53,18 @@ python .\scripts\session_retro_offline.py --staging "$env:USERPROFILE\copilot-le
 
 全操作はローカルで、出力はGit管理外の**新規フォルダ**のみ。実セッションの利用権限、対象機密、組織ポリシー/DLPを事前確認する。元ZIPは未公開であり、出力に機密が全く含まれない保証はしない。外部送信は既存 require_online_release() で引き続き停止する。
 
+## VS Codeエクスポートの構造診断（本文を表示しない）
+
+VS Codeの Chat: Export Chat... は公式のコマンドだが、実際に出力されるJSONは製品版・セッション種別によって変わり得る。未確認のschemaをCLIネイティブ events.jsonl として扱わない。
+
+利用者が任意のセッションを手動でエクスポートし、ローカルファイルを選択した場合のみ、次のコマンドで固定されたキーの有無と型を確認できる。
+
+~~~powershell
+python .\scripts\inspect_vscode_export_schema.py --export "$env:USERPROFILE\copilot-export-private\session.json" --acknowledge-local-inspection
+~~~
+
+このツールは明示的なフラグなしではJSONを開かない。出力は sessionId / requests / message.text / response の存在・型と件数だけで、**会話本文、任意のフィールド名、ファイルパス、トークン、指示内容を表示しない**。セッションを正規化せず、データは公開Gitへコミットしない。返るformat_statusはschema_review_required_no_conversionである。実際の製品バージョンとの互換性を確認するまでは、VS Code形式を学習に投入しない。
+
 ## Windows実機に関して確認できた範囲
 
 DESKTOP-KM8CL39ではCopilot CLIコマンドが見つからず、~/.copilot/session-state も存在しなかった（2026-11-19のメタデータ確認）。一方、VS CodeのworkspaceStorageディレクトリの存在は確認できた。個別の会話/トランスクリプトは開いていない。このため **実CopilotイベントによるE2E検証は未実施**。
