@@ -16,6 +16,7 @@ from copilot_learning.session_retro import analyze_sessions, export_preview, ver
 from scripts.prepare_sessions import prepare
 from scripts.probe_session_sources import main as probe_cli
 from scripts.session_retro_offline import main as retro_cli
+from scripts.inspect_vscode_export_schema import inspect_export, main as inspect_vscode_cli
 
 
 def raw_events() -> list[dict]:
@@ -215,6 +216,51 @@ class CliSessionAdapterTests(unittest.TestCase):
         self.assertFalse(record["vscode_export_parsed"])
         self.assertNotIn("PRIVATE", buffer.getvalue())
         self.assertNotIn("private-session-name", buffer.getvalue())
+
+    def test_vscode_export_schema_inspector_requires_opt_in(self):
+        file = self.root / "export.json"
+        file.write_text(json.dumps({
+            "sessionId": "synthetic",
+            "requests": [{"message": {"text": "CONFIDENTIAL PRIVATE CHAT TEXT"},
+                          "response": [{"value": "SECRET OTHER RESPONSE"}]}],
+        }), encoding="utf-8")
+        buffer = io.StringIO()
+        with contextlib.redirect_stderr(buffer):
+            self.assertEqual(inspect_vscode_cli(["--export", str(file)]), 2)
+        self.assertNotIn("CONFIDENTIAL", buffer.getvalue())
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(inspect_vscode_cli([
+                "--export", str(file), "--acknowledge-local-inspection",
+            ]), 0)
+        summary = json.loads(output.getvalue())
+        self.assertTrue(summary["has_requests_array"])
+        self.assertTrue(summary["first_message_text_string"])
+        self.assertTrue(summary["first_response_element_object"])
+        self.assertEqual(summary["format_status"], "schema_review_required_no_conversion")
+        self.assertNotIn("CONFIDENTIAL", output.getvalue())
+        self.assertNotIn("SECRET", output.getvalue())
+
+    def test_vscode_schema_inspector_does_not_make_up_missing_fields(self):
+        file = self.root / "unknown.json"
+        file.write_text(json.dumps({"totallyDifferent": "PRIVATE"}), encoding="utf-8")
+        found = inspect_export(file)
+        self.assertFalse(found["has_requests_array"])
+        self.assertIsNone(found["request_count"])
+        self.assertFalse(found["normalized_events_produced"])
+
+    def test_vscode_export_symlink_and_invalid_json_rejected(self):
+        file = self.root / "invalid.json"
+        file.write_text("not json", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            inspect_export(file)
+        link = self.root / "link.json"
+        try:
+            link.symlink_to(file)
+        except OSError:
+            return
+        with self.assertRaises(ValueError):
+            inspect_export(link)
 
     def test_probe_missing_source_and_symlink_are_safe(self):
         buffer = io.StringIO()
