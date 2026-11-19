@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT))
 from copilot_learning.core import InvalidData, assert_external_output
 
 # Runtimeから到達する既存モジュールのみ。デモ、台帳、鍵、辞書、業務データは同梱しない。
-MODULES = ("__init__", "core", "learning", "review_safety", "applicability", "wiki", "okf",
+MODULES = ("__init__", "core", "learning", "model_review_contract", "review_safety", "applicability", "wiki", "okf",
            "retrieval", "privacy_scan", "knowledge_store", "frozen_bundle", "preflight")
 PACKAGE_ROOTS = {"boto3", "botocore", "s3transfer", "jmespath", "dateutil", "six.py", "urllib3", "yaml", "_yaml"}
 NATIVE_SUFFIXES = (".so", ".pyd", ".dll", ".dylib")
