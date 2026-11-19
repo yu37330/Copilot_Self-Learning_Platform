@@ -190,8 +190,20 @@ def build_conversion(raw: bytes, payload: dict[str, Any],
     }
 
 
-def prepare_import(export_path: Path, policy_path: Path) -> tuple[dict[str, Any], bytes, bytes, bytes]:
-    """S3へ出さず、同一内容から決定的なZIP/manifest/receiptを作る。"""
+def prepare_import(export_path: Path, policy_path: Path, *,
+                   prepared_at_utc: str | None = None) -> tuple[dict[str, Any], bytes, bytes, bytes]:
+    """S3なし。ZIP本文は再現可能、保存時刻は実際の取込時刻を記録する。"""
+    if prepared_at_utc is None:
+        prepared_at_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    else:
+        try:
+            parsed = datetime.fromisoformat(prepared_at_utc.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                raise ValueError("timezone")
+        except (ValueError, AttributeError) as exc:
+            raise InvalidData("保存時刻の形式が不正です") from exc
+        if parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") != prepared_at_utc:
+            raise InvalidData("保存時刻はUTCの正規形式が必要です")
     policy, policy_sha = load_policy(_path(policy_path))
     raw, payload = _load_export(export_path, policy["sensitive_literals"])
     events, provenance = build_conversion(raw, payload, policy_sha)
@@ -204,8 +216,7 @@ def prepare_import(export_path: Path, policy_path: Path) -> tuple[dict[str, Any]
                    "size_bytes": len(events_body)}]
     fp = content_fingerprint(components)
     archive = build_archive([("events.jsonl", events_body)])
-    # 原本への変換時にのみ採用した日時。再生成時も確定したイベントの時刻を使用。
-    first = next(event["timestamp"] for event in events if event["type"] == "message")
+    # archive作成日時は実際の時刻を記録し、会話開始日時と混同しない。
     manifest = {
         "schema_version": "1.0", "record_type": "copilot-session-archive",
         "session_fingerprint": fp, "source_session_id_sha256": None,
@@ -214,7 +225,7 @@ def prepare_import(export_path: Path, policy_path: Path) -> tuple[dict[str, Any]
         "archive_sha256": digest(archive),
         "contents": components,
         "review_status": "requires_manual_approval",
-        "prepared_at_utc": first,
+        "prepared_at_utc": prepared_at_utc,
         "source_export_format": provenance["source_format"],
         "source_export_sha256": provenance["source_export_sha256"],
         "adapter_version": VERSION,
@@ -230,6 +241,7 @@ def prepare_import(export_path: Path, policy_path: Path) -> tuple[dict[str, Any]
         "session_fingerprint": fp,
         "archive_sha256": digest(archive),
         "manifest_sha256": digest(json_bytes(manifest)),
+        "prepared_at_utc": prepared_at_utc,
         "recognized_event_count": normalized["recognized_event_count"],
         "skipped_event_count": normalized["skipped_event_count"],
         "status": ("partial_requires_manual_review" if normalized["skipped_event_count"]
@@ -290,9 +302,22 @@ def verify_import(export_path: Path, policy_path: Path, directory: Path,
     """原本の現行bytesと独立保管のreceipt SHAを再照合する（通信なし）。"""
     if not isinstance(expected_receipt_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_receipt_sha256):
         raise InvalidData("独立保管したreceipt SHA-256が必要です")
-    receipt, archive, manifest, receipt_body = prepare_import(export_path, policy_path)
     dest = _path(directory)
     assert_external_output(dest, ROOT)
+    pinned_receipt = _path(dest / RECEIPT_FILE)
+    if not pinned_receipt.is_file() or pinned_receipt.stat().st_size > 2_000_000:
+        raise InvalidData("保存済みreceiptがありません")
+    raw_receipt = pinned_receipt.read_bytes()
+    # 改ざん済みの保存時刻を使わないよう、独立保管したSHAを先に照合。
+    if digest(raw_receipt) != expected_receipt_sha256:
+        raise InvalidData("receiptの独立SHAが一致しません")
+    try:
+        saved = json.loads(raw_receipt.decode("utf-8"))
+        prepared = saved["prepared_at_utc"]
+    except (UnicodeDecodeError, ValueError, KeyError, TypeError) as exc:
+        raise InvalidData("receiptの保存時刻を検証できません") from exc
+    receipt, archive, manifest, receipt_body = prepare_import(
+        export_path, policy_path, prepared_at_utc=prepared)
     fp = receipt["session_fingerprint"]
     expected = {f"session-{fp}.zip": archive,
                 f"session-{fp}.manifest.json": manifest, RECEIPT_FILE: receipt_body}
