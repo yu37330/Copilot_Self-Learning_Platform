@@ -140,7 +140,12 @@ def _timestamp(value: dict[str, Any], fallback: str) -> tuple[str, str]:
 
 
 def normalize_events(manifest: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
-    """厳密な許可リストで変換。未知のCopilot eventは未対応と記録する。"""
+    """厳密な許可リストで変換。CLIネイティブ形式は明示的なアダプターで扱う。"""
+    # 旧形式（合成type=message）との後方互換性を維持する。
+    # ネイティブはtype/dataの明確な形式がある場合のみ検出し、推測しない。
+    from .cli_session_adapter import is_native_cli_event_stream, normalize_native_cli_events
+    if is_native_cli_event_stream(events):
+        return normalize_native_cli_events(manifest, events)
     fp = manifest["session_fingerprint"]
     fallback = manifest.get("prepared_at_utc")
     if not isinstance(fallback, str):
