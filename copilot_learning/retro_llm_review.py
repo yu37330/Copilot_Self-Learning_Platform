@@ -110,11 +110,10 @@ def grade_independent_review(request: dict[str, Any], reviewer_output: dict[str,
             or not isinstance(reviewer_output["decisions"], list)
             or len(reviewer_output["decisions"]) != len(candidates)):
         raise InvalidData("独立Reviewerの提案数が不一致です")
-    expected = {_proposal_id(row): row for row in candidates} if False else {
-        row["proposal_id"]: row for row in candidates
-    }
-    if len(expected) != len(candidates):
-        raise InvalidData("レビュー対象に重複があります")
+    expected = {row["proposal_id"]: row for row in candidates}
+    if (len(expected) != len(candidates)
+            or any(_proposal_id(row) != row["proposal_id"] for row in candidates)):
+        raise InvalidData("レビュー対象IDが一致しないか重複しています")
     seen: set[str] = set()
     result = []
     for row in reviewer_output["decisions"]:
