@@ -262,7 +262,7 @@ class ExplicitTaskBindingTests(unittest.TestCase):
         repo.mkdir()
         (repo / ".git").mkdir()
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli(["index", *self._args()[:-2], "--out", str(repo / "private"),
+            self.assertEqual(cli(["index", *self._args()[:-3], "--out", str(repo / "private"),
                                   "--acknowledge-local-analysis"]), 2)
         self.assertFalse((repo / "private").exists())
         self.out.mkdir()
