@@ -21,7 +21,7 @@ Microsoft VS Code公式コードのchatImportExport.tsでは、エクスポー�
 python .\scripts\import_vscode_export_offline.py import --export "$env:USERPROFILE\copilot-export-private\chat.json" --policy "$env:USERPROFILE\copilot-export-private\policy.json" --out "$env:USERPROFILE\copilot-export-private\converted-01" --acknowledge-local-import
 ~~~
 
-出力先は必ずGit管理外の新規フォルダ。session-(fingerprint).zip、session-(fingerprint).manifest.json、import-receipt.jsonの3ファイルが作成される。ZIPには会話の限定本文が含まれるため秘密として保管する。manifestには元のJSONのSHAとZIPのSHA、receiptには出典イベントindex/リクエストindex、除外理由、時刻代用件数、ポリシーSHAだけを保存する。元のexport JSON全文はコピーしない。
+出力先は必ずGit管理外の新規フォルダ。session-(fingerprint).zip、session-(fingerprint).manifest.json、import-receipt.jsonの3ファイルが作成される。ZIPには会話の限定本文が含まれるため秘密として保管する。manifestには元のJSONのSHAとZIPのSHA、**実際のローカル取込時刻**を保存する。元エクスポートにネイティブsession IDはないため、source_session_id_sha256=nullと明記する。receiptには出典イベントindex/リクエストindex、除外理由、時刻代用件数、ポリシーSHAと取込時刻を保存する。元のexport JSON全文はコピーしない。同一原本からのZIP本文は決定的だが、manifest/receiptは実際の取込時刻を含むため実行ごとに異なり得る。
 
 CLIが返すreceipt_sha256を別途保管し、再検証する。
 
