@@ -25,3 +25,6 @@ __pycache__/
 *memory_records.json
 
 feedback-*.json
+
+# VS Code手動セッション取込の私的出典マップ
+import-receipt.json

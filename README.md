@@ -22,7 +22,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 
 | 範囲 | 状態 |
 |---|---|
-| セッション選別・ZIP化・SHA検証・イベント正規化 | 既存の合成形式とCopilot CLIのネイティブtype/dataを別経路で認識。合成データで検証。実Copilot/VS Code exportの実機形式は未検証 |
+| セッション選別・ZIP化・SHA検証・イベント正規化 | 合成形式・CLIネイティブ形式に加え、VS Codeの公式toExport JSONの限定テキスト部分から安全なZIPを生成。合成テスト済み。実Copilot利用者データでは未検証 |
 | Memory投入計画・送信データ固定・機密語検査・署名承認検証 | オフライン実装。組織の認証と実送信は未接続 |
 | 候補単位の証拠・反証評価、意味レビューの安全側判定 | 実装。実モデルでの精度は未検証 |
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり本人/組織による正式承認ではない |
@@ -120,7 +120,7 @@ python .\scripts\probe_session_sources.py
 python .\scripts\prepare_sessions.py --list
 ```
 
-詳細は[ネイティブCLI形式・安全制約](docs/cli-session-ingest-20261119.md)を参照してください。対象WindowsのCLI保存先は実機で未確認（現時点で既定フォルダは不在）です。VS Codeの Chat: Export Chat... JSONは**別形式で、まだパーサー未実装**。VS Code exportをCopilot CLIイベントと推測して変換しません。ユーザーが手動エクスポートしたJSONに対しては、内容を表示せず、既知キーの有無と型だけを判定する `scripts/inspect_vscode_export_schema.py --export <file> --acknowledge-local-inspection` も利用できます。
+詳細は[ネイティブCLI形式・安全制約](docs/cli-session-ingest-20261119.md)を参照してください。対象WindowsのCLI保存先は実機で未確認（現時点で既定フォルダは不在）です。VS Codeの Chat: Export Chat... JSONはCLIと異なる構造です。公式ソースの ChatModel.toExport() で確認できた発言・Markdown応答だけを、**明示的な同意とローカル機密辞書の下で**取り込む限定アダプターを追加しました。ツール実行・内部コンテキスト・未知の応答型は本文として取り込みません。利用手順は[VS Code手動JSON取込](docs/vscode-export-offline-ingest-20261119.md)を参照してください。実セッション形式・機密データ受入はまだ未検証です。
 
 ## セッションのローカル準備
 
