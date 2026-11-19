@@ -22,7 +22,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 
 | 範囲 | 状態 |
 |---|---|
-| セッション選別・ZIP化・SHA検証・イベント正規化 | 合成データで検証。実Copilotのイベント形式は未検証 |
+| セッション選別・ZIP化・SHA検証・イベント正規化 | 既存の合成形式とCopilot CLIのネイティブtype/dataを別経路で認識。合成データで検証。実Copilot/VS Code exportの実機形式は未検証 |
 | Memory投入計画・送信データ固定・機密語検査・署名承認検証 | オフライン実装。組織の認証と実送信は未接続 |
 | 候補単位の証拠・反証評価、意味レビューの安全側判定 | 実装。実モデルでの精度は未検証 |
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり本人/組織による正式承認ではない |
@@ -107,6 +107,20 @@ python .\scripts\demo_instruction_effect.py --out "$env:USERPROFILE\copilot-retr
 ```
 
 デモは完全な合成データであり、実Copilot/LLM/APIを呼ばずに比較レポートを確認できます。実測ファイルの `blank` / `evaluate` CLI と詳細な入力形式は[Phase C評価ガイド](docs/instruction-effect-phase-c-20261119.md)を参照してください。実際のセッションログ形式確認、計測runner、実LLMによる根本原因分析は未完了です。
+
+### Issue #36：ネイティブCopilot CLIのイベント取り込み
+
+CLIの実セッションでは type=user.message / assistant.message / tool.execution_complete 等の形式が使われます。既存の平坦なmessageイベントとは分けて正規化する対応を追加しました。元の tool 出力は取り込まず、失敗イベントのみ固定のエラー兆候に置き換えます。タイムスタンプとイベント証拠ID・元ZIPのSHAを保持し、未知形式・機密・混合形式は保留します。
+
+```powershell
+# 本文を読まず保存先の有無・件数だけを確認
+python .\scripts\probe_session_sources.py
+
+# CLIセッションが存在し、対象データの利用が許可されている場合
+python .\scripts\prepare_sessions.py --list
+```
+
+詳細は[ネイティブCLI形式・安全制約](docs/cli-session-ingest-20261119.md)を参照してください。対象WindowsのCLI保存先は実機で未確認（現時点で既定フォルダは不在）です。VS Codeの Chat: Export Chat... JSONは**別形式で、まだパーサー未実装**。VS Code exportをCopilot CLIイベントと推測して変換しません。
 
 ## セッションのローカル準備
 
