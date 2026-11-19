@@ -103,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         provider = None
+        grade_provider = None
         if args.use_bedrock:
             require_online_release()
             if not (args.confirm_approved_data and args.approval_file and args.expected_account_id
@@ -126,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         report = process(args.staging, args.fingerprint, args.out, args.memory_id, args.actor_id,
                          feedback_file=args.feedback, candidate_file=args.candidates,
                          memory_records_file=args.memory_records, provider=provider,
-                         grade_provider=grade_provider if provider is not None else None)
+                         grade_provider=grade_provider)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
     except (InvalidData, OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
