@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from copilot_learning.core import InvalidData, SHA_PATTERN, digest, json_bytes
+from copilot_learning.model_review_contract import enforce_distinct_model_ids
 
 VERSION = "single-runtime-1"
 MODES = {"custom", "original_wiki", "custom_and_original_wiki", "memory_ingest", "memory_wiki", "hybrid"}
@@ -180,6 +181,12 @@ def job(value: Any, settings: Settings) -> dict:
             settings.model(value[key])
         elif value[key] is not None:
             fail("UNUSED_MODEL_SETTING")
+    if custom:
+        # 生成用と評価用の同一model IDを排除する。名称・提供元の真正性は別検証。
+        try:
+            enforce_distinct_model_ids(value["extract_model_id"], value["grade_model_id"])
+        except InvalidData:
+            fail("GENERATOR_REVIEWER_MODEL_CONFLICT")
     if mode in {"memory_ingest", "memory_wiki", "hybrid"}:
         settings.memory(value["memory_profile"], value["project"])
     elif value["memory_profile"] is not None:

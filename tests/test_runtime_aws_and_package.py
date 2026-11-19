@@ -216,6 +216,7 @@ class PackageTests(unittest.TestCase):
             with zipfile.ZipFile(a) as z:
                 self.assertIn("main.py",z.namelist());self.assertIn("lambda_function.py",z.namelist())
                 self.assertIn("boto3/__init__.py",z.namelist())
+                self.assertIn("copilot_learning/model_review_contract.py", z.namelist())
                 # CodeZipを再配布する場合にも、プロジェクト本体のMIT表示が必要。
                 self.assertIn("LICENSE",z.namelist())
                 self.assertEqual(z.read("LICENSE"),(ROOT/"LICENSE").read_bytes())
