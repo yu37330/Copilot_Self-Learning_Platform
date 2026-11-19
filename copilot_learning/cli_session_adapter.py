@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .core import InvalidData, MAX_EVENT_TEXT_CHARS, check_sensitive
+from .privacy_scan import BUILTIN_RULES
 
 VERSION = "cli-native-allowlist-1"
 
@@ -108,6 +109,10 @@ def normalize_native_cli_events(manifest: dict[str, Any], events: list[dict[str,
                 skipped.append({"event_index": index, "reason": "text_too_long"})
                 continue
         check_sensitive(text)
+        # Phase Aへ渡す原文にもメール/電話/JWTの既知パターン検査を適用する。
+        # 検出文字列はログや例外に含めず、安全側で停止する。
+        if any(pattern.search(text) for pattern in BUILTIN_RULES.values()):
+            raise InvalidData("個人情報または機密情報の疑いがあるため取込を停止します")
         messages.append({
             "event_index": index, "role": role, "text": text,
             "timestamp": _timestamp(record), "timestamp_source": "native_event_timestamp",
