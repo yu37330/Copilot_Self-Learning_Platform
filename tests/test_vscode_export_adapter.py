@@ -16,6 +16,7 @@ from copilot_learning.vscode_export_adapter import (
 )
 from copilot_learning.session_retro import export_preview, analyze_sessions
 from scripts.import_vscode_export_offline import main as cli
+from scripts.session_retro_offline import main as retro_cli
 
 
 def synthetic_export() -> dict:
@@ -79,6 +80,8 @@ class VSCodeExportAdapterTests(unittest.TestCase):
         manifest, raw_events = read_archive(self.out, fp)
         self.assertEqual(manifest["source_export_sha256"], digest(self.export.read_bytes()))
         self.assertEqual(manifest["source_export_format"], "vscode-chat-export-model-toExport")
+        self.assertIsNone(manifest["source_session_id_sha256"])
+        self.assertEqual(manifest["source_session_id_status"], "not_in_export_format")
         self.assertEqual([ev.get("type") for ev in raw_events].count("message"), 5)
         session = normalize_events(manifest, raw_events)
         self.assertEqual(session["recognized_event_count"], 5)
@@ -252,6 +255,22 @@ class VSCodeExportAdapterTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli(["verify", *command,
                                   "--expected-receipt-sha256", receipt["receipt_sha256"]]), 0)
+
+    def test_imported_zip_is_accepted_by_existing_retro_cli(self):
+        receipt = export_import(self.export, self.policy, self.out)
+        retro_out = self.root / "retro-cli-preview"
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(retro_cli([
+                "--staging", str(self.out),
+                "--fingerprint", receipt["session_fingerprint"],
+                "--out", str(retro_out),
+            ]), 0)
+        report = json.loads((retro_out / "retrospective.preview.json").read_text("utf-8"))
+        self.assertEqual({item["rule_id"] for item in report["findings"]},
+                         {"explicit_correction", "missing_verification"})
+        self.assertEqual(report["coverage"], "partial_unrecognized_events")
+        self.assertNotIn("PRIVATE", stdout.getvalue())
 
     def test_symlink_input_rejected(self):
         link = self.root / "linked.json"
