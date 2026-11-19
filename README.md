@@ -143,6 +143,14 @@ ChatGPTの公式データエクスポートに含まれる会話JSONとDesktop C
 
 入力は機密を含みうるためGit管理外で管理し、明示的な同意が必要です。ChatGPTエクスポートの全バージョンには対応していません。機密辞書、入力形式、独立ハッシュ再検証、限界は[第3系統の利用ガイド](docs/chatgpt-task-improvement-20261120.md)を参照してください。合成テストのみ検証済みです。
 
+### Issue #41 Phase 2：ChatGPT会話とDesktop Commanderの明示Task紐付け
+
+匿名集計に加え、ChatGPT会話のIDハッシュとDesktop Commander呼び出しの通し番号・元レコードSHAをインデックス化し、ユーザーが明示的に定義したTask IDの範囲だけを紐づけられます。時刻が近いだけでは同一業務と判断せず、**報告された完了状態も外部成果物で検証するまでは未確認**です。
+
+    python .\scripts\bind_chatgpt_task_trace_offline.py index --chatgpt-json "$env:USERPROFILE\private-export\conversations.json" --desktop-history "$env:USERPROFILE\private-export\tool-history.jsonl" --policy "$env:USERPROFILE\private-export\policy.json" --out "$env:USERPROFILE\cti-ref-index-01" --acknowledge-local-analysis
+
+利用者がインデックスを見て作るTask manifestを使ったbind/verifyは[Task ID紐づけガイド](docs/chatgpt-task-trace-linking-20261120.md)に記載。原文・コマンド・会話タイトルは出力しません。実ユーザーデータを使った互換性・業務完了の独立確認は未検証です。
+
 ## セッションのローカル準備
 
 ```powershell

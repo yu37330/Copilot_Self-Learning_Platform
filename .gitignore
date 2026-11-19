@@ -33,3 +33,8 @@ import-receipt.json
 conversations.json
 tool-history.jsonl
 chatgpt-task-improvement.preview.json
+
+# Issue #41: 明示Task紐付けのローカル専用参照・結果
+task-trace.index.json
+task-trace.review.json
+task-bindings.json
