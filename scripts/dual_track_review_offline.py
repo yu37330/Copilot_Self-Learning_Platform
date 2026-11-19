@@ -14,7 +14,8 @@ from copilot_learning.core import (
     normalize_events, read_archive,
 )
 from copilot_learning.dual_track_review import (
-    export_retrospective_offline, generator_request, reviewer_request,
+    export_retrospective_offline, verify_retrospective_offline,
+    generator_request, reviewer_request,
 )
 from copilot_learning.offline_model_port import (
     ModelRoute, OfflineBoundJSONModel, request_sha256, MAX_REPLY_BYTES,
@@ -85,7 +86,7 @@ def _export_request(payload: dict, output: Path, root: Path) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("generator-request", "reviewer-request", "review"))
+    parser.add_argument("command", choices=("generator-request", "reviewer-request", "review", "verify"))
     parser.add_argument("--staging", type=Path, required=True)
     parser.add_argument("--fingerprint", action="append", required=True)
     parser.add_argument("--repo", type=Path, required=True, help="既存指示を読取専用で参照する対象リポジトリ")
@@ -94,15 +95,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--opinion", type=Path, help="別モデルによる意見JSON。reviewで必要")
     parser.add_argument("--generator-model-id", default="offline-generator-01")
     parser.add_argument("--reviewer-model-id", default="offline-reviewer-02")
+    parser.add_argument("--expected-manifest-sha256",
+                        help="verify時の独立保管manifest SHA")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if not 1 <= len(args.fingerprint) <= 32:
             raise InvalidData("セッションの上限を超えています")
-        if (args.command in {"reviewer-request", "review"}) != (args.proposal is not None):
+        if (args.command in {"reviewer-request", "review", "verify"}) != (args.proposal is not None):
             raise InvalidData("提案JSONの指定が不正です")
-        if (args.command == "review") != (args.opinion is not None):
+        if (args.command in {"review", "verify"}) != (args.opinion is not None):
             raise InvalidData("独立レビューの指定が不正です")
+        if (args.command == "verify") != (args.expected_manifest_sha256 is not None):
+            raise InvalidData("verifyでのみ独立保管したmanifest SHAを指定できます")
         staging = _path(args.staging)
         sessions = []
         for fp in args.fingerprint:
@@ -132,8 +137,13 @@ def main(argv: list[str] | None = None) -> int:
                 ModelRoute("offline-local", args.reviewer_model_id, "reviewer"),
                 expected_request_sha256=request_sha256(rv["system"], rv["prompt"]),
                 response=opinion)
-            result = export_retrospective_offline(
-                sessions, args.repo, args.policy, generator, reviewer, args.out)
+            if args.command == "verify":
+                result = verify_retrospective_offline(
+                    sessions, args.repo, args.policy, generator, reviewer, args.out,
+                    args.expected_manifest_sha256)
+            else:
+                result = export_retrospective_offline(
+                    sessions, args.repo, args.policy, generator, reviewer, args.out)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except (InvalidData, OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
