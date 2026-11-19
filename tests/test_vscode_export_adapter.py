@@ -82,6 +82,9 @@ class VSCodeExportAdapterTests(unittest.TestCase):
         self.assertEqual(manifest["source_export_format"], "vscode-chat-export-model-toExport")
         self.assertIsNone(manifest["source_session_id_sha256"])
         self.assertEqual(manifest["source_session_id_status"], "not_in_export_format")
+        from datetime import datetime, timezone
+        prepared = datetime.fromisoformat(manifest["prepared_at_utc"].replace("Z", "+00:00"))
+        self.assertLess(abs((datetime.now(timezone.utc) - prepared).total_seconds()), 120)
         self.assertEqual([ev.get("type") for ev in raw_events].count("message"), 5)
         session = normalize_events(manifest, raw_events)
         self.assertEqual(session["recognized_event_count"], 5)
@@ -129,11 +132,13 @@ class VSCodeExportAdapterTests(unittest.TestCase):
         self.assertEqual(original["status"], "verified_offline_import_only")
         second_out = self.root / "second"
         second = export_import(self.export, self.policy, second_out)
-        self.assertEqual(first, second)
-        self.assertEqual((self.out / RECEIPT_FILE).read_bytes(),
-                         (second_out / RECEIPT_FILE).read_bytes())
+        # 実際の作成時刻が異なっても、取込対象イベントのZIPは完全再現できる。
+        self.assertEqual(first["session_fingerprint"], second["session_fingerprint"])
         self.assertEqual((self.out / "session-{}.zip".format(first["session_fingerprint"])).read_bytes(),
                          (second_out / "session-{}.zip".format(first["session_fingerprint"])).read_bytes())
+        self.assertEqual(
+            verify_import(self.export, self.policy, second_out, second["receipt_sha256"])["status"],
+            "verified_offline_import_only")
 
     def test_modified_input_and_output_fail_verification(self):
         receipt = export_import(self.export, self.policy, self.out)
