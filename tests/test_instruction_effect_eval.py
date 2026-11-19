@@ -17,6 +17,7 @@ from copilot_learning.instruction_effect_eval import (
     blank_observations, evaluate_instruction_effect, validate_dataset,
 )
 from scripts.evaluate_instruction_effect_offline import main as cli
+from scripts.demo_instruction_effect import main as demo_cli, synthetic_demo
 
 
 def sample_dataset() -> dict:
@@ -333,6 +334,30 @@ class InstructionEffectTests(unittest.TestCase):
             self.assertEqual(cli(["blank", "--dataset", str(dataset_path),
                                   "--out", str(public_path)]), 2)
         self.assertFalse(public_path.exists())
+
+    def test_synthetic_demo_is_safe_and_reproducible(self):
+        dataset, submission = synthetic_demo()
+        self.assertEqual(dataset["label_source"], "synthetic")
+        self.assertEqual(submission["dataset_sha256"], digest(json_bytes(dataset)))
+        report = evaluate_instruction_effect(dataset, submission)
+        self.assertEqual(report["n_cases"], 5)
+        self.assertEqual(report["paired_comparison"]["candidate_only_success"], 2)
+        self.assertEqual(report["paired_comparison"]["delta_success_rate"], 0.4)
+        self.assertFalse(report["causal_improvement_established"])
+
+    def test_synthetic_demo_cli_no_overwrite(self):
+        output = self.root / "demo"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(demo_cli(["--out", str(output)]), 0)
+        self.assertEqual(
+            {item.name for item in output.iterdir()},
+            {"dataset.synthetic.json", "observations.synthetic.json",
+             "observations.blank.json", "comparison.synthetic.json", "manifest.json"},
+        )
+        self.assertEqual(json.loads((output / "comparison.synthetic.json").read_text("utf-8"))
+                         ["comparison_status"], "submitted_not_independently_verified")
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(demo_cli(["--out", str(output)]), 2)
 
     def test_no_network_or_subprocess_or_model(self):
         with patch("socket.socket.connect") as connect, patch("subprocess.run") as run:
