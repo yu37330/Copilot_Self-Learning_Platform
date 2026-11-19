@@ -28,3 +28,8 @@ feedback-*.json
 
 # VS Code手動セッション取込の私的出典マップ
 import-receipt.json
+
+# ChatGPT Task Improvement: ローカルの原本・匿名プレビュー（Issue #41）
+conversations.json
+tool-history.jsonl
+chatgpt-task-improvement.preview.json
