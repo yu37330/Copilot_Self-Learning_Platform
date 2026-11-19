@@ -41,7 +41,7 @@ PATH_RULES = (
 
 # 疑わしい文面は正当な引用であっても人手確認に送り、改善パッチとして出さない。
 RISK = re.compile(
-    r"(?:ignore (?:all )?(?:previous|prior|system) instructions|"
+    r"(?:\b(?:ignore|disregard) (?:all )?(?:previous|prior|system)(?: system)? instructions?\b|"
     r"(?:disable|bypass|skip|omit|remove) (?:all )?(?:approval|authorization|audit|security|logging|tests?|reviews?)|"
     r"(?:承認|認可|監査|テスト|検証|レビュー|セキュリティ)(?:を)?(?:省略|無効化|回避)|"
     r"(?:never|do not|don't) run tests?|"
