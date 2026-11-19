@@ -270,13 +270,19 @@ class TwoTrackReviewTests(unittest.TestCase):
         receipt = export_retrospective_offline(
             self.sessions, self.repo, self.policy, generator, reviewer, out)
         self.agents.write_text("# Changed after first review\n", encoding="utf-8")
-        generator2, reviewer2 = self.pair if False else (None, None)
-        # Existing inventory has changed. Rebuilding the old request is not an
-        # acceptable verification path; any new route must be rejected.
+        generator2 = OfflineBoundJSONModel(
+            ModelRoute("offline-synthetic", "old-gen", "generator"),
+            expected_request_sha256=request_sha256(self.request["system"], self.request["prompt"]),
+            response=self.proposal)
+        reviewer2 = OfflineBoundJSONModel(
+            ModelRoute("offline-synthetic", "old-reviewer", "reviewer"),
+            expected_request_sha256="0" * 64, response=self.opinion)
+        # Recompute against the NOW changed instruction. Old model response
+        # must not be accepted on the new snapshot.
         with self.assertRaises(InvalidData):
-            new_req = generator_request(self.sessions, self.repo, self.policy)
-            if new_req["inventory_sha256"] != self.proposal["inventory_sha256"]:
-                raise InvalidData("instruction version mismatch")
+            verify_retrospective_offline(
+                self.sessions, self.repo, self.policy, generator2, reviewer2,
+                out, receipt["manifest_sha256"])
 
     def test_export_to_repository_is_blocked(self):
         gen, rev = self.pair()
