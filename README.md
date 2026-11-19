@@ -28,7 +28,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり本人/組織による正式承認ではない |
 | A/B/C/Dの共通・ペア比較と検索評価 | 評価器を実装。実サービスを走らせた比較ではない |
 | Skillプレビューの出力・再検証 | 実装。既存のSkills/Instructionsに書き込まない |
-| セッション振り返り・指示改善の候補表示 | Issue #31 Phase A: 規則ベースの根拠付きプレビューを実装。Phase B: 指示ファイルのSHA照合と改善案の独立検査、未適用diffの出力を追加。実Copilotログ・LLM・改善効果は未検証 |
+| セッション振り返り・指示改善 | Issue #31 Phase A: 兆候抽出、Phase B: 指示改善diffのオフライン独立検査、Phase C: 変更前後の未学習タスク比較・費用/手戻りの提出済み観測集計。実Copilotログ・LLM・改善効果は未検証 |
 | WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。Runtimeのモデル呼出経路は実装、実LLMは未検証 |
 | 単一Runtime（CodeZip）・S3起動Lambda | HTTP入口、既存処理の統合、依存同梱ZIP、CFN定義・モック結合検証。AWS実デプロイ未実施 |
 | Copilotへの動的注入・Workflow実行 | 未実装 |
@@ -97,6 +97,16 @@ python .\scripts\instruction_review_offline.py request --staging "$env:USERPROFI
 ```
 
 続く手動提案作成、gradeによるdiff出力、verifyによる版固定の再検証は[Phase B手順](docs/instruction-review-phase-b-20261119.md)を参照してください。WindowsのCRLFの検査、危険指示・出典不一致の拒否、Git管理外出力の制限を追加しています。すべてオフラインの合成データによる検証であり、実際の品質改善の立証ではありません。
+
+### Issue #31 Phase C：指示改善の効果を未学習タスクで比較
+
+AGENTS.md・Skillsの変更前後を、同じ未学習タスク、モデル、ツール権限、推論予算で評価した**提出済み観測値**からペア集計します。成功/失敗/保留、ツール呼出回数、手戻り回数、token/費用、遅延の違いを示し、実際のCopilot実行や改善の因果性を実証したとは扱いません。未実行・未計測はnullを維持し、訓練グループとの重複を拒否します。
+
+```powershell
+python .\scripts\demo_instruction_effect.py --out "$env:USERPROFILE\copilot-retro-phase-c-demo-01"
+```
+
+デモは完全な合成データであり、実Copilot/LLM/APIを呼ばずに比較レポートを確認できます。実測ファイルの `blank` / `evaluate` CLI と詳細な入力形式は[Phase C評価ガイド](docs/instruction-effect-phase-c-20261119.md)を参照してください。実際のセッションログ形式確認、計測runner、実LLMによる根本原因分析は未完了です。
 
 ## セッションのローカル準備
 
