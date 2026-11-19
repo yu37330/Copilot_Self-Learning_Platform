@@ -273,6 +273,27 @@ def make_report(session: dict[str, Any], memory_plan: list[dict[str, Any]],
     }
 
 
+def independent_grade_prompt(graded: list[dict[str, Any]], session: dict[str, Any],
+                             feedback: list[dict[str, Any]] | None = None) -> str:
+    """独立Graderに送るJSONデータを、同じ入力から確定的に作成する。
+
+    外部送信は行わない。実データの原文を含むため、保存・転送に注意する。
+    """
+    compact = [{k: item[k] for k in ("knowledge_id", "knowledge_type", "title", "description",
+                                    "instruction", "generalization", "evidence_ids", *SCOPE_FIELDS) if k in item}
+               for item in graded if item["decision"] != "drop"]
+    evidence = [{k: m.get(k) for k in ("evidence_id", "role", "text", "timestamp")}
+                for m in session["messages"]]
+    observations = [{k: f.get(k) for k in ("candidate_sha256", "evidence_ids", "outcome",
+                                          "claim_verdict", "evidence", "reusable_lesson")}
+                    for f in (feedback or [])]
+    prompt = json.dumps({"candidates": compact, "evidence": evidence,
+                         "feedback_including_counterevidence": observations,
+                         "skipped_event_count": session.get("skipped_event_count", 0)}, ensure_ascii=False)
+    check_sensitive(prompt)
+    return prompt
+
+
 def independent_llm_grade(provider: Any, graded: list[dict[str, Any]],
                           session: dict[str, Any] | None = None,
                           feedback: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -291,14 +312,7 @@ def independent_llm_grade(provider: Any, graded: list[dict[str, Any]],
                for item in graded if item["decision"] != "drop"]
     if not compact:
         return graded
-    evidence = [{k: m.get(k) for k in ("evidence_id", "role", "text", "timestamp")}
-                for m in session["messages"]]
-    observations = [{k: f.get(k) for k in ("candidate_sha256", "evidence_ids", "outcome",
-                                          "claim_verdict", "evidence", "reusable_lesson")}
-                    for f in (feedback or [])]
-    prompt = json.dumps({"candidates": compact, "evidence": evidence,
-                         "feedback_including_counterevidence": observations,
-                         "skipped_event_count": session.get("skipped_event_count", 0)}, ensure_ascii=False)
+    prompt = independent_grade_prompt(graded, session, feedback)
     check_sensitive(prompt)
     answer = provider.generate(prompt, system=GRADER_SYSTEM)
     if not isinstance(answer, dict) or not isinstance(answer.get("decisions"), list):
