@@ -116,6 +116,24 @@ class InstructionReviewTests(unittest.TestCase):
             "verified_review_only",
         )
 
+    def test_existing_skill_allowed_tools_is_not_a_new_permission_request(self):
+        # 既存Skillの宣言を読取できることと、新規提案で権限を付与することは区別する。
+        skill = self.repo / ".github" / "skills" / "existing" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text(
+            "---\\nname: existing\\ndescription: Existing safe reference\\nallowed-tools: read\\n---\\n"
+            .replace("\\\\n", "\\n"), encoding="utf-8",
+        )
+        current = instruction_inventory(self.repo, [])
+        self.assertIn(".github/skills/existing/SKILL.md", [row["path"] for row in current["files"]])
+        response = {**self.base,
+                    "inventory_sha256": digest(json_bytes(current)),
+                    "proposals": [self.append]}
+        result = export_review(self.sessions, self.repo, self.policy, response, self.output)
+        self.assertEqual(result["status"], "preview_written_not_applied")
+        self.assertIn("allowed-tools: read", skill.read_text("utf-8"))
+        self.assertFalse((self.output / PATCH_FILE).read_text("utf-8").count("allowed-tools:"))
+
     def test_new_skill_requires_safe_frontmatter(self):
         new_skill = {
             **self.append,
