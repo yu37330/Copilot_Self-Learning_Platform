@@ -18,8 +18,8 @@ from .instruction_review import (
     _scan_text, MAX_OUTPUT_BYTES,
 )
 from .learning import (
-    extraction_prompt, generate_candidates, grade_candidates, independent_llm_grade,
-    EXTRACT_SYSTEM, GRADER_SYSTEM,
+    extraction_prompt, independent_grade_prompt, generate_candidates,
+    grade_candidates, independent_llm_grade, EXTRACT_SYSTEM, GRADER_SYSTEM,
 )
 from .offline_model_port import (
     OfflineBoundJSONModel, require_offline_model_pair, request_sha256,
@@ -205,6 +205,14 @@ def knowledge_generator_request(session: dict[str, Any],
                                 feedback: list[dict[str, Any]]) -> dict[str, str]:
     """Payload includes transcript: NEVER export this prompt to a public repository."""
     return {"system": EXTRACT_SYSTEM, "prompt": extraction_prompt(session, feedback)}
+
+
+def knowledge_grader_request(session: dict[str, Any], feedback: list[dict[str, Any]],
+                             candidates: list[dict[str, Any]]) -> dict[str, str]:
+    """Gradeの入力を事前確認する。原文を含むので公開Gitに出してはいけない。"""
+    graded = grade_candidates(candidates, session, feedback)
+    return {"system": GRADER_SYSTEM,
+            "prompt": independent_grade_prompt(graded, session, feedback)}
 
 
 def run_knowledge_offline(session: dict[str, Any], feedback: list[dict[str, Any]],
