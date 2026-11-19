@@ -204,7 +204,8 @@ def prepare_import(export_path: Path, policy_path: Path) -> tuple[dict[str, Any]
     first = next(event["timestamp"] for event in events if event["type"] == "message")
     manifest = {
         "schema_version": "1.0", "record_type": "copilot-session-archive",
-        "session_fingerprint": fp, "source_session_id_sha256": digest(raw),
+        "session_fingerprint": fp, "source_session_id_sha256": None,
+        "source_session_id_status": "not_in_export_format",
         "archive_file": f"session-{fp}.zip",
         "archive_sha256": digest(archive),
         "contents": components,
