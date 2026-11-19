@@ -127,7 +127,8 @@ def build_conversion(raw: bytes, payload: dict[str, Any],
                             "response_part_index": None, "timestamp_basis": None})
             continue
         events.append({"type": "message", "role": "user", "text": message,
-                       "timestamp": request_time})
+                       "timestamp": request_time,
+                       "timestamp_basis": "vscode_request_timestamp"})
         mapping.append({"event_index": len(events)-1, "request_index": idx,
                         "response_part_index": None, "timestamp_basis": "request_timestamp"})
         parts = req.get("response")
@@ -160,7 +161,10 @@ def build_conversion(raw: bytes, payload: dict[str, Any],
                 ts_origin = None
             else:
                 events.append({"type": "message", "role": "assistant",
-                               "text": safe_text, "timestamp": response_time})
+                               "text": safe_text, "timestamp": response_time,
+                               "timestamp_basis": (
+                                   "vscode_response_timestamp" if _time(req.get("responseTimestamp"))
+                                   else "vscode_request_timestamp_fallback")})
                 ts_origin = ("response_timestamp" if _time(req.get("responseTimestamp"))
                              else "request_timestamp_fallback")
             mapping.append({"event_index": len(events)-1, "request_index": idx,
