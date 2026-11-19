@@ -19,6 +19,7 @@ from copilot_learning.instruction_review import instruction_inventory
 from copilot_learning.session_retro import analyze_sessions
 from scripts.prepare_sessions import prepare
 from scripts.dual_track_review_offline import main as cli
+from copilot_learning.offline_model_port import request_sha256
 
 
 class DualTrackReviewCLITests(unittest.TestCase):
@@ -100,8 +101,7 @@ class DualTrackReviewCLITests(unittest.TestCase):
         self.assertEqual(status1, 0)
         req1 = json.loads((target1 / "model-request.preview.json").read_text("utf-8"))
         self.assertEqual(req1["request_sha256"],
-                         generator_request(self.sessions, self.repo, self.policy)
-                         ["model_execution_authorized"] if False else req1["request_sha256"])
+                         request_sha256(req1["system"], req1["prompt"]))
         self.assertIn("missing_verification", req1["prompt"])
         self.assertNotIn("テストしていないのに", req1["prompt"])
         self.assertFalse(req1["external_transfer_authorized"])
@@ -157,7 +157,7 @@ class DualTrackReviewCLITests(unittest.TestCase):
         self.assertFalse(target.exists())
 
     def test_missing_stage_file_rejected_before_model_use(self):
-        target = self.root / "target"
+        target = self.root / "bad-missing-file"
         code, _ = self.invoke(
             "review", *self.common(), "--proposal", str(self.prop_path),
             "--out", str(target))
