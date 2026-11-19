@@ -177,7 +177,17 @@ def normalize_events(manifest: dict[str, Any], events: list[dict[str, Any]]) -> 
             continue
         check_sensitive(text)
         timestamp, source = _timestamp(record, fallback)
-        timestamp_fallback_count += int(source == "manifest_prepared_at_utc")
+        # VS Code手動exportでは応答時刻が存在しない場合がある。
+        # 正規化後も「リクエスト時刻で代用」を明示し、実測時刻と混同しない。
+        basis = record.get("timestamp_basis")
+        if source == "timestamp" and basis in {
+            "vscode_request_timestamp", "vscode_response_timestamp",
+            "vscode_request_timestamp_fallback",
+        }:
+            source = basis
+        timestamp_fallback_count += int(source in {
+            "manifest_prepared_at_utc", "vscode_request_timestamp_fallback",
+        })
         messages.append({
             "event_index": index, "role": role.upper(), "text": text,
             "timestamp": timestamp, "timestamp_source": source,
