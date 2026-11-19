@@ -120,10 +120,10 @@ class InstructionReviewTests(unittest.TestCase):
         # 既存Skillの宣言を読取できることと、新規提案で権限を付与することは区別する。
         skill = self.repo / ".github" / "skills" / "existing" / "SKILL.md"
         skill.parent.mkdir(parents=True)
-        skill.write_text(
-            "---\\nname: existing\\ndescription: Existing safe reference\\nallowed-tools: read\\n---\\n"
-            .replace("\\\\n", "\\n"), encoding="utf-8",
-        )
+        skill.write_text("\n".join([
+            "---", "name: existing", "description: Existing safe reference",
+            "allowed-tools: read", "---", "", "# Existing Skill", "",
+        ]), encoding="utf-8")
         current = instruction_inventory(self.repo, [])
         self.assertIn(".github/skills/existing/SKILL.md", [row["path"] for row in current["files"]])
         response = {**self.base,
