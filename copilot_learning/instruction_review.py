@@ -57,13 +57,17 @@ def _target_allowed(path: str) -> bool:
             and any(rule.fullmatch(path) for rule in PATH_RULES))
 
 
-def _scan_text(text: str, terms: list[str]) -> None:
-    """Windows CRLFは検査時だけLFに正規化し、単独CRは拒否する。"""
+def _scan_text(text: str, terms: list[str], *, proposed: bool = True) -> None:
+    """既存指示と新規提案を区別し、提案だけで権限拡大の危険表現を拒否する。
+
+    既存Skillに許可済みallowed-tools等があっても読み取りは可能にし、
+    提案へのコピー・新規追加を承認したことにはしない。
+    """
     checked = text.replace("\r\n", "\n")
     if "\r" in checked:
         raise InvalidData("改行コードが不正です")
     _check_text(checked, terms)
-    if RISK.search(checked):
+    if proposed and RISK.search(checked):
         raise InvalidData("危険な指示変更の疑いがあるため保留します")
 
 
@@ -130,7 +134,7 @@ def instruction_inventory(root: Path, literals: list[str]) -> dict[str, Any]:
             content = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise InvalidData("指示ファイルはUTF-8である必要があります") from exc
-        _scan_text(content, literals)
+        _scan_text(content, literals, proposed=False)
         result.append({"path": name, "sha256": digest(raw), "size_bytes": len(raw)})
     return {"schema_version": "1.0", "record_type": "offline-instruction-inventory",
             "files": result, "file_count": len(result)}
@@ -146,7 +150,7 @@ def _load_existing(root: Path, entry: dict[str, Any], literals: list[str]) -> st
         content = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise InvalidData("指示ファイルはUTF-8である必要があります") from exc
-    _scan_text(content, literals)
+    _scan_text(content, literals, proposed=False)
     return content
 
 
