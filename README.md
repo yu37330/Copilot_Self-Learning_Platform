@@ -28,7 +28,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり本人/組織による正式承認ではない |
 | A/B/C/Dの共通・ペア比較と検索評価 | 評価器を実装。実サービスを走らせた比較ではない |
 | Skillプレビューの出力・再検証 | 実装。既存のSkills/Instructionsに書き込まない |
-| セッション振り返り・指示改善の候補表示 | Issue #31のオフライン初期版。規則ベースの根拠付きプレビューのみ。実Copilotログ・改善効果は未検証 |
+| セッション振り返り・指示改善の候補表示 | Issue #31 Phase A: 規則ベースの根拠付きプレビューを実装。Phase B: 指示ファイルのSHA照合と改善案の独立検査、未適用diffの出力を追加。実Copilotログ・LLM・改善効果は未検証 |
 | WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。Runtimeのモデル呼出経路は実装、実LLMは未検証 |
 | 単一Runtime（CodeZip）・S3起動Lambda | HTTP入口、既存処理の統合、依存同梱ZIP、CFN定義・モック結合検証。AWS実デプロイ未実施 |
 | Copilotへの動的注入・Workflow実行 | 未実装 |
@@ -87,6 +87,16 @@ python .\scripts\session_retro_offline.py --staging "$env:USERPROFILE\copilot-le
 ```
 
 結果はretrospective.preview.json、RETROSPECTIVE.preview.md、manifest.jsonです。独立保管したmanifest SHAを使った `--verify` にも対応。Git管理外の新規出力先のみ許可し、自動適用は行いません。詳細は[使用方法・制約・今後の実装](docs/session-retro-20261119.md)。合成回帰テストのみ完了し、実Copilotセッション形式への適合性は未検証です。
+
+### Issue #31 Phase B：既存指示との差分プレビュー
+
+現在のAGENTS.md・Copilot instructions・Skills・custom Agentsを読取専用で棚卸しし、セッションの根拠IDと現行ファイルのSHAに紐づけた改善提案JSONを独立検査します。生成されるdiffはレビュー用で**自動適用しません**。レビュー要求に元セッションや指示ファイルの本文は含まず、実LLMの呼出しも行いません。
+
+```powershell
+python .\scripts\instruction_review_offline.py request --staging "$env:USERPROFILE\copilot-learning-staging" --fingerprint "<64桁SHA>" --repo "C:\path\to\repository" --policy "$env:USERPROFILE\copilot-learning\policy.json" --out "$env:USERPROFILE\retro-review-request-01"
+```
+
+続く手動提案作成、gradeによるdiff出力、verifyによる版固定の再検証は[Phase B手順](docs/instruction-review-phase-b-20261119.md)を参照してください。WindowsのCRLFの検査、危険指示・出典不一致の拒否、Git管理外出力の制限を追加しています。すべてオフラインの合成データによる検証であり、実際の品質改善の立証ではありません。
 
 ## セッションのローカル準備
 
