@@ -86,6 +86,9 @@ class VSCodeExportAdapterTests(unittest.TestCase):
         session = normalize_events(manifest, raw_events)
         self.assertEqual(session["recognized_event_count"], 5)
         self.assertEqual(session["skipped_event_count"], 1)
+        self.assertEqual(session["messages"][0]["timestamp_source"], "vscode_request_timestamp")
+        self.assertEqual(session["messages"][-1]["timestamp_source"], "vscode_request_timestamp_fallback")
+        self.assertEqual(session["timestamp_fallback_count"], 1)
         self.assertEqual(session["format_status"], "recognized")
         self.assertEqual(result["skipped_event_count"], 1)
 
