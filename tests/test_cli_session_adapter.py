@@ -15,6 +15,7 @@ from copilot_learning.core import InvalidData, normalize_events, read_archive
 from copilot_learning.session_retro import analyze_sessions, export_preview, verify_preview
 from scripts.prepare_sessions import prepare
 from scripts.probe_session_sources import main as probe_cli
+from scripts.session_retro_offline import main as retro_cli
 
 
 def raw_events() -> list[dict]:
@@ -135,6 +136,15 @@ class CliSessionAdapterTests(unittest.TestCase):
             normalize_events(self.manifest, events)
         self.assertNotIn(events[1]["data"]["content"], str(exc.exception))
 
+    def test_known_pii_is_blocked_before_retro(self):
+        for message in ("contact: test@example.org",
+                        "phone: 090-1234-5678"):
+            events = raw_events()
+            events[1]["data"]["content"] = message
+            with self.subTest(message=message), self.assertRaises(InvalidData) as caught:
+                normalize_events(self.manifest, events)
+            self.assertNotIn(message, str(caught.exception))
+
     def test_timestamp_offset_converted_to_utc(self):
         events = raw_events()
         events[1]["timestamp"] = "2026-11-19T14:00:01+09:00"
@@ -168,6 +178,20 @@ class CliSessionAdapterTests(unittest.TestCase):
         self.assertEqual(verified["status"], "verified_preview_only")
         preview = (out / "retrospective.preview.json").read_text("utf-8")
         self.assertNotIn("synthetic private", preview)
+
+        # 操作手順のCLI自体もネイティブZIPを受け取れることを確認する。
+        cli_out = self.root / "cli-preview"
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            self.assertEqual(retro_cli([
+                "--staging", str(staging), "--fingerprint", fingerprint,
+                "--out", str(cli_out),
+            ]), 0)
+        self.assertEqual(
+            json.loads((cli_out / "retrospective.preview.json").read_text("utf-8"))["finding_count"],
+            2,
+        )
+        self.assertNotIn("synthetic private", buffer.getvalue())
 
     def test_probe_only_counts_files_never_reads_content(self):
         root = self.root / "session-state"
