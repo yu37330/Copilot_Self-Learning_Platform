@@ -187,7 +187,11 @@ def prepare_import(export_path: Path, policy_path: Path) -> tuple[dict[str, Any]
     policy, policy_sha = load_policy(_path(policy_path))
     raw, payload = _load_export(export_path, policy["sensitive_literals"])
     events, provenance = build_conversion(raw, payload, policy_sha)
-    events_body = b"".join(json_bytes(event) for event in events)
+    # JSONLは1イベントを1物理行で保存。json_bytes()は整形JSONのため利用しない。
+    events_body = "".join(
+        json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+        for event in events
+    ).encode("utf-8")
     components = [{"name": "events.jsonl", "sha256": digest(events_body),
                    "size_bytes": len(events_body)}]
     fp = content_fingerprint(components)
