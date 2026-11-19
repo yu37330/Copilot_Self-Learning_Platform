@@ -193,16 +193,17 @@ class VSCodeExportAdapterTests(unittest.TestCase):
         self.assertEqual(events[0]["text"], "意図と違うのでやり直して")
 
     def test_known_sensitive_text_rejected_without_echo(self):
-        for sensitive in ("test@example.org", "090-1234-5678",
-                          "AKIAABCDEFGHIJKLMNOP", "内部機密テスト語"):
+        for i, sensitive in enumerate(("test@example.org", "090-1234-5678",
+                                       "AKIAABCDEFGHIJKLMNOP", "内部機密テスト語")):
             doc = deepcopy(self.document)
             doc["requests"][0]["message"]["text"] += sensitive
             self._rewrite(doc)
-            with self.subTest(sensitive=sensitive):
+            target = self.root / f"blocked-{i}"
+            with self.subTest(sensitive_type=i):
                 with self.assertRaises(InvalidData) as caught:
-                    export_import(self.export, self.policy, self.out)
+                    export_import(self.export, self.policy, target)
                 self.assertNotIn(sensitive, str(caught.exception))
-                self.assertFalse(self.out.exists())
+                self.assertFalse(target.exists())
 
     def test_unrecognized_source_without_valid_timestamp_rejected(self):
         doc = deepcopy(self.document)
