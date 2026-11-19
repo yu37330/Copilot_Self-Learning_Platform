@@ -133,6 +133,15 @@ class DualTrackReviewCLITests(unittest.TestCase):
                       (target / "changes.preview.diff").read_text("utf-8"))
         self.assertTrue((self.repo / "AGENTS.md").read_text("utf-8").startswith("# Development"))
         self.assertNotIn("テストしていないのに", out)
+        manifest_sha = json.loads(out)["manifest_sha256"]
+        verify_code, verify_result = self.invoke(
+            "verify", *self.common(), "--proposal", str(self.prop_path),
+            "--opinion", str(self.opinion_path), "--out", str(target),
+            "--generator-model-id", "synthetic-generator-01",
+            "--reviewer-model-id", "synthetic-reviewer-02",
+            "--expected-manifest-sha256", manifest_sha)
+        self.assertEqual(verify_code, 0)
+        self.assertEqual(json.loads(verify_result)["status"], "verified_offline_review_only")
 
     def test_review_rejected_opinion_suppresses_diff(self):
         opinion = deepcopy(self.opinion)
