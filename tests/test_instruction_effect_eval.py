@@ -68,7 +68,8 @@ def sample_submission(dataset: dict) -> dict:
         arms[arm] = {
             "source_kind": "synthetic",
             "instruction_sha256": dataset["instruction_snapshots"][arm],
-            "profile": profile,
+            # 比較条件を独立した辞書にし、片方のテスト変更が他方へ波及しないようにする。
+            "profile": deepcopy(profile),
             "executor_sha256": "5" * 64,
             "cases": cases,
         }
