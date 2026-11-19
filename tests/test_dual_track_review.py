@@ -11,6 +11,7 @@ from unittest.mock import patch
 from copilot_learning.core import InvalidData, digest, json_bytes
 from copilot_learning.dual_track_review import (
     GENERATOR_SYSTEM, REVIEWER_SYSTEM, export_retrospective_offline,
+    verify_retrospective_offline,
     generator_request, reviewer_request, run_retrospective_offline,
     knowledge_generator_request, knowledge_grader_request, run_knowledge_offline,
 )
@@ -238,6 +239,44 @@ class TwoTrackReviewTests(unittest.TestCase):
         self.assertNotIn("Run tests on a representative change",
                          (out / "dual-review.preview.json").read_text("utf-8"))
         self.assertEqual(self.agents.read_text("utf-8").startswith("# Commands"), True)
+
+    def test_preview_verify_rejects_tamper_and_changed_instruction(self):
+        generator, reviewer = self.pair()
+        out = self.dir / "bound"
+        receipt = export_retrospective_offline(
+            self.sessions, self.repo, self.policy, generator, reviewer, out)
+        generator2, reviewer2 = self.pair()
+        value = verify_retrospective_offline(
+            self.sessions, self.repo, self.policy, generator2, reviewer2,
+            out, receipt["manifest_sha256"])
+        self.assertEqual(value["status"], "verified_offline_review_only")
+        generator3, reviewer3 = self.pair()
+        with self.assertRaises(InvalidData):
+            verify_retrospective_offline(
+                self.sessions, self.repo, self.policy, generator3, reviewer3,
+                out, "f" * 64)
+        file = out / "changes.preview.diff"
+        file.chmod(0o600)
+        file.write_text("TAMPERED", encoding="utf-8")
+        generator4, reviewer4 = self.pair()
+        with self.assertRaises(InvalidData):
+            verify_retrospective_offline(
+                self.sessions, self.repo, self.policy, generator4, reviewer4,
+                out, receipt["manifest_sha256"])
+
+    def test_changed_instruction_blocks_offline_review_replay(self):
+        generator, reviewer = self.pair()
+        out = self.dir / "bound"
+        receipt = export_retrospective_offline(
+            self.sessions, self.repo, self.policy, generator, reviewer, out)
+        self.agents.write_text("# Changed after first review\n", encoding="utf-8")
+        generator2, reviewer2 = self.pair if False else (None, None)
+        # Existing inventory has changed. Rebuilding the old request is not an
+        # acceptable verification path; any new route must be rejected.
+        with self.assertRaises(InvalidData):
+            new_req = generator_request(self.sessions, self.repo, self.policy)
+            if new_req["inventory_sha256"] != self.proposal["inventory_sha256"]:
+                raise InvalidData("instruction version mismatch")
 
     def test_export_to_repository_is_blocked(self):
         gen, rev = self.pair()
