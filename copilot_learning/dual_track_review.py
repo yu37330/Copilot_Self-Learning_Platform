@@ -234,16 +234,8 @@ def run_knowledge_offline(session: dict[str, Any], feedback: list[dict[str, Any]
     }
 
 
-def export_retrospective_offline(sessions: list[dict[str, Any]], root: Path,
-                                 policy: Path, generator: OfflineBoundJSONModel,
-                                 reviewer: OfflineBoundJSONModel,
-                                 destination: Path) -> dict[str, Any]:
-    """Only new directories OUTSIDE both the platform and target repository."""
-    payload = run_retrospective_offline(sessions, root, policy, generator, reviewer)
-    out = _output_path(destination)
-    target_repo = _safe_repo(root)
-    if out == target_repo or target_repo in out.parents or out.exists():
-        raise InvalidData("Git管理外の新規フォルダ以外へは出力できません")
+def prepare_dual_preview(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """未採用diffと意見をmanifest SHA付きの固定プレビューとして組み立てる。"""
     non_diff = {k: v for k, v in payload.items() if k != "diff"}
     files = {
         "dual-review.preview.json": json_bytes(non_diff),
@@ -261,6 +253,20 @@ def export_retrospective_offline(sessions: list[dict[str, Any]], root: Path,
         "status": "unapproved_offline_simulation",
         "approved_for_copilot": False, "network_calls": 0,
     }
+    return manifest, files
+
+
+def export_retrospective_offline(sessions: list[dict[str, Any]], root: Path,
+                                 policy: Path, generator: OfflineBoundJSONModel,
+                                 reviewer: OfflineBoundJSONModel,
+                                 destination: Path) -> dict[str, Any]:
+    """Only new directories OUTSIDE both the platform and target repository."""
+    payload = run_retrospective_offline(sessions, root, policy, generator, reviewer)
+    out = _output_path(destination)
+    target_repo = _safe_repo(root)
+    if out == target_repo or target_repo in out.parents or out.exists():
+        raise InvalidData("Git管理外の新規フォルダ以外へは出力できません")
+    manifest, files = prepare_dual_preview(payload)
     out.parent.mkdir(parents=True, exist_ok=True)
     _path(out.parent)
     out.mkdir(mode=0o700)
@@ -286,3 +292,34 @@ def export_retrospective_offline(sessions: list[dict[str, Any]], root: Path,
         "candidate_count": payload["review"]["proposal_count"],
         "real_llm_called": False, "approved_for_copilot": False, "network_calls": 0,
     }
+
+
+def verify_retrospective_offline(sessions: list[dict[str, Any]], root: Path,
+                                 policy: Path, generator: OfflineBoundJSONModel,
+                                 reviewer: OfflineBoundJSONModel,
+                                 directory: Path, expected_manifest_sha256: str
+                                 ) -> dict[str, Any]:
+    """別途保管したmanifest SHAから元データ・応答・指示・プレビューを再検証。"""
+    import re
+    if not isinstance(expected_manifest_sha256, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", expected_manifest_sha256
+    ):
+        raise InvalidData("独立保管したmanifest SHAが必要です")
+    out = _output_path(directory)
+    target_repo = _safe_repo(root)
+    if out == target_repo or target_repo in out.parents:
+        raise InvalidData("対象repo内のプレビューは検証できません")
+    payload = run_retrospective_offline(sessions, root, policy, generator, reviewer)
+    manifest, files = prepare_dual_preview(payload)
+    expected = {**files, "manifest.json": json_bytes(manifest)}
+    if digest(expected["manifest.json"]) != expected_manifest_sha256:
+        raise InvalidData("manifestの独立SHAに一致しません")
+    if not out.is_dir() or {p.name for p in out.iterdir()} != set(expected):
+        raise InvalidData("プレビューのファイル構成が変更されています")
+    for name, body in expected.items():
+        p = _path(out / name)
+        if not p.is_file() or p.stat().st_size != len(body) or p.read_bytes() != body:
+            raise InvalidData("レビュー結果と現在の原本・モデル意見が一致しません")
+    return {"status": "verified_offline_review_only",
+            "changes_applied": False, "approved_for_copilot": False,
+            "real_llm_called": False, "network_calls": 0}
