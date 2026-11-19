@@ -98,6 +98,16 @@ python .\scripts\instruction_review_offline.py request --staging "$env:USERPROFI
 
 続く手動提案作成、gradeによるdiff出力、verifyによる版固定の再検証は[Phase B手順](docs/instruction-review-phase-b-20261119.md)を参照してください。WindowsのCRLFの検査、危険指示・出典不一致の拒否、Git管理外出力の制限を追加しています。すべてオフラインの合成データによる検証であり、実際の品質改善の立証ではありません。
 
+### Issue #31：知識学習・Retrospectiveの独立LLMレビュー設定
+
+生成LLMと独立評価LLMを2系統で分ける設定・未信頼レビューの検査を追加しました。知識学習CLIの生成/評価Providerの共有を禁止し、Runtimeのcustom系でも同じモデルIDを拒否します。Session RetrospectiveはPhase Bの検証済み改善案から別モデルのレビュー依頼を作り、持ち込まれた結果のSHA・ID・危険文言を照合します。評価モデルの「支持」も人間の確認待ちで、AGENTS.mdやSkillsは**自動変更しません**。
+
+```powershell
+python .\scripts\dual_model_review_offline.py plan --model-plan .\examples\dual_track_models.synthetic.json --out "$env:USERPROFILE\dual-review-plan-01"
+```
+
+上の例は合成モデルIDで、実Claude/Nova/GPT等のモデル選定・API接続・外部送信を意味しません。設定では生成と評価のmodel_idを別に指定します。詳しくは[モデルルーティングと独立レビュー手順](docs/dual-model-review-20261120.md)を参照してください。
+
 ### Issue #31 Phase C：指示改善の効果を未学習タスクで比較
 
 AGENTS.md・Skillsの変更前後を、同じ未学習タスク、モデル、ツール権限、推論予算で評価した**提出済み観測値**からペア集計します。成功/失敗/保留、ツール呼出回数、手戻り回数、token/費用、遅延の違いを示し、実際のCopilot実行や改善の因果性を実証したとは扱いません。未実行・未計測はnullを維持し、訓練グループとの重複を拒否します。
