@@ -58,8 +58,12 @@ def _target_allowed(path: str) -> bool:
 
 
 def _scan_text(text: str, terms: list[str]) -> None:
-    _check_text(text, terms)
-    if RISK.search(text):
+    """Windows CRLFは検査時だけLFに正規化し、単独CRは拒否する。"""
+    checked = text.replace("\r\n", "\n")
+    if "\r" in checked:
+        raise InvalidData("改行コードが不正です")
+    _check_text(checked, terms)
+    if RISK.search(checked):
         raise InvalidData("危険な指示変更の疑いがあるため保留します")
 
 
@@ -251,8 +255,12 @@ def _simple_overlap(existing: str, addition: str) -> list[str]:
 
 
 def _diff(path: str, before: str, after: str, *, created: bool) -> str:
+    """レビュー表示のためのLF形式diff。元ファイルのバイト列は変更しない。"""
+    normalized_before = before.replace("\r\n", "\n")
+    normalized_after = after.replace("\r\n", "\n")
     return "".join(difflib.unified_diff(
-        [] if created else before.splitlines(keepends=True), after.splitlines(keepends=True),
+        [] if created else normalized_before.splitlines(keepends=True),
+        normalized_after.splitlines(keepends=True),
         fromfile="/dev/null" if created else "a/" + path,
         tofile="b/" + path,
         n=0,
