@@ -60,3 +60,30 @@ python .\scripts\dual_model_review_offline.py retro-grade --model-plan .\example
 テスト：python -m unittest discover -s tests -p test_dual_track_model_review.py -v
 
 実装：copilot_learning/model_review_contract.py、copilot_learning/retro_llm_review.py、scripts/dual_model_review_offline.py、scripts/run_learning_poc.py、runtime_service/contracts.py。
+
+
+## 独立評価を最終レビューと未適用diffへ統合する
+
+PR #39の共通モデル設定、Phase Bの差分、提出された独立レビュー結果を重複する別スキーマに分岐させず、最後に一括して照合する仕組みを追加した。あらためてモデルを呼ぶものではない。
+
+前提：上記retro-gradeに使用したmodel-plan JSON、検証済みsession ZIP、Phase B提案JSON、別モデルによる回答JSONを**Git管理外**で保管済み。これらは手動で提出された情報であり、実モデル利用の真正性を検証したものではない。
+
+~~~powershell
+python .\scripts\finalize_retro_review_offline.py export --model-plan .\examples\dual_track_models.synthetic.json --staging "$env:USERPROFILE\copilot-learning-staging" --fingerprint "(64桁fingerprint)" --repo "C:\path\to\repository" --policy "$env:USERPROFILE\retro-private\policy.json" --proposals "$env:USERPROFILE\retro-private\offline-proposals.json" --reviewer-output "$env:USERPROFILE\retro-private\reviewer.json" --out "$env:USERPROFILE\retro-private\final-review-01"
+~~~
+
+出力：final-review.preview.json（すべて未承認）、changes.preview.diff、manifest.json。すべての評価がsupport_for_manual_reviewの場合だけdiffの**未適用プレビュー**を保存する。一件でもrevise/rejectならdiffは空になる。支持も実際の品質・承認を意味しない。
+
+返ってきたmanifest_sha256を別に保管し、同じ入力と出力を検証する。
+
+~~~powershell
+python .\scripts\finalize_retro_review_offline.py verify --model-plan .\examples\dual_track_models.synthetic.json --staging "$env:USERPROFILE\copilot-learning-staging" --fingerprint "(64桁fingerprint)" --repo "C:\path\to\repository" --policy "$env:USERPROFILE\retro-private\policy.json" --proposals "$env:USERPROFILE\retro-private\offline-proposals.json" --reviewer-output "$env:USERPROFILE\retro-private\reviewer.json" --out "$env:USERPROFILE\retro-private\final-review-01" --expected-manifest-sha256 "(独立保管した64桁SHA)"
+~~~
+
+元セッション/モデル計画/生成提案/独立レビューレシート/対象指示ファイル/出力のいずれかが変われば検証を拒否。実LLM実行、意味的な独立性、Copilotへの自動設定変更、外部送信、GitHub Actions/CIは追加していない。
+
+合成テスト：
+
+~~~powershell
+python -m unittest discover -s tests -p test_retro_review_finalizer.py -v
+~~~

@@ -108,6 +108,8 @@ python .\scripts\dual_model_review_offline.py plan --model-plan .\examples\dual_
 
 上の例は合成モデルIDで、実Claude/Nova/GPT等のモデル選定・API接続・外部送信を意味しません。設定では生成と評価のmodel_idを別に指定します。詳しくは[モデルルーティングと独立レビュー手順](docs/dual-model-review-20261120.md)を参照してください。
 
+独立Reviewerの意見を検査した後、`scripts/finalize_retro_review_offline.py`で未適用のdiffへ集約する最終段階も追加しました。評価が`revise`/`reject`ならdiffを出力せず、`support_for_manual_review`でも正式採用しません。元の証拠・指示ファイル・レビュー結果・出力は、独立保管したmanifest SHAで再検証できます。コマンド例と制限は同じ手順書に記載しています。
+
 ### Issue #31 Phase C：指示改善の効果を未学習タスクで比較
 
 AGENTS.md・Skillsの変更前後を、同じ未学習タスク、モデル、ツール権限、推論予算で評価した**提出済み観測値**からペア集計します。成功/失敗/保留、ツール呼出回数、手戻り回数、token/費用、遅延の違いを示し、実際のCopilot実行や改善の因果性を実証したとは扱いません。未実行・未計測はnullを維持し、訓練グループとの重複を拒否します。
