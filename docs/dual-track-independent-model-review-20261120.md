@@ -48,6 +48,14 @@ python .\scripts\dual_track_review_offline.py review --staging "$env:USERPROFILE
 
 出力はdual-review.preview.json、changes.preview.diff、manifest.json。生成・評価モデルIDは異なる文字列を求めるが、申告文字列の真正性は未検証。
 
+4. review実行時に返されたmanifest_sha256を保存フォルダとは別に控え、同じ引数で再検証する。
+
+~~~powershell
+python .\scripts\dual_track_review_offline.py verify --staging "$env:USERPROFILE\copilot-staging" --fingerprint "64桁fingerprint" --repo "C:\path\to\repository" --policy "$env:USERPROFILE\copilot-private\policy.json" --proposal "$env:USERPROFILE\copilot-private\proposal.json" --opinion "$env:USERPROFILE\copilot-private\opinion.json" --generator-model-id offline-gen-01 --reviewer-model-id offline-review-02 --out "$env:USERPROFILE\copilot-private\dual-review-01" --expected-manifest-sha256 "独立保管した64桁SHA"
+~~~
+
+元セッション、既存指示、ローカル辞書、生成/レビュー応答、プレビューの何れかが変わった場合に検証を拒否する。これは本人/組織の署名・正式採用承認を証明しない。
+
 ## 独立評価の形式
 
 ~~~json
