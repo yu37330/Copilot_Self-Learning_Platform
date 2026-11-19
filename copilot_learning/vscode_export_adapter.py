@@ -28,6 +28,8 @@ MAX_REQUESTS = 2000
 MAX_PARTS_PER_REQUEST = 100
 MAX_STAGED_EVENTS = 10000
 VERSION = "vscode-export-adapter-1"
+# 日本語に隣接するASCIIメールも保護する。既存の汎用regexの\w境界に依存しない。
+EMAIL_ANYWHERE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
 RECEIPT_FILE = "import-receipt.json"
 # 公式IExportableChatDataの最低限の判別キー。モデル.toJSONとの混同を禁止。
 EXPECTED_EXPORT_KEYS = frozenset({"responderUsername", "requests"})
@@ -59,7 +61,8 @@ def _load_export(path: Path, literals: list[str]) -> tuple[bytes, dict[str, Any]
         raise InvalidData("エクスポートはUTF-8 JSONが必要です") from exc
     # 保管するのは許可フィールドだけでも、原本全体の既知機密を一次検査する。
     check_sensitive(text)
-    if (any(pattern.search(text) for pattern in BUILTIN_RULES.values())
+    if (EMAIL_ANYWHERE.search(text)
+            or any(pattern.search(text) for pattern in BUILTIN_RULES.values())
             or any(word.casefold() in text.casefold() for word in literals)):
         raise InvalidData("機密・個人情報の疑いがあるため処理を拒否しました")
     if (not isinstance(payload, dict) or not EXPECTED_EXPORT_KEYS <= payload.keys()
