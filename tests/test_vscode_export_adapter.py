@@ -198,10 +198,11 @@ class VSCodeExportAdapterTests(unittest.TestCase):
             doc = deepcopy(self.document)
             doc["requests"][0]["message"]["text"] += sensitive
             self._rewrite(doc)
-            with self.subTest(sensitive=sensitive), self.assertRaises(InvalidData) as caught:
-                export_import(self.export, self.policy, self.out)
-            self.assertNotIn(sensitive, str(caught.exception))
-            self.assertFalse(self.out.exists())
+            with self.subTest(sensitive=sensitive):
+                with self.assertRaises(InvalidData) as caught:
+                    export_import(self.export, self.policy, self.out)
+                self.assertNotIn(sensitive, str(caught.exception))
+                self.assertFalse(self.out.exists())
 
     def test_unrecognized_source_without_valid_timestamp_rejected(self):
         doc = deepcopy(self.document)
