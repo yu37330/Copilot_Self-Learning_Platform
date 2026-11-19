@@ -82,3 +82,18 @@ prepare_sessions.py の検証済みZIP/manifest
 これは既存のSkillプレビュー/Knowledge Store/Runtime処理とは分離した**提案候補の検出**である。既存のセッション出典ID・archive SHAを保持し、原文はプレビューへ転載しない。Phase BでのLLMによる根本原因分析、AGENTS.md等の実差分生成、既存指示との矛盾検査、Phase Cでのheld-out比較は未実装である。
 
 [使用方法・制限・合成テスト](session-retro-20261119.md)。
+
+
+## 追記（2026-11-20、Issue #41）：第3系統 ChatGPT Task Improvement
+
+Copilot専用の①知識学習系と②Session Retrospectiveに加えて、ChatGPTへの業務依頼を評価する③ChatGPT Task Improvementの**オフライン匿名集計経路**を分離した。
+
+- 入力1：ユーザーが選んだChatGPT公式データエクスポート内の会話JSON（アクティブな会話分岐のuser/assistantだけ）
+- 入力2：ユーザーが選んだDesktop Commanderのtool-history.jsonlまたはJSON配列
+- 実行：analyze_chatgpt_desktop_offline.py → chatgpt_task_trace.evaluate_sources → 固定の改善候補と匿名集計 → manifest SHAによる再検証
+- 保持しない情報：会話本文、タイトル、実行コマンド、コマンド引数、ツール出力、任意の内部ツール名、ファイルパス
+- 安全：機密語辞書と明示的なローカル同意が必要。既存Git管理外の新規フォルダにだけプレビュー出力。AWS・LLM・Copilotへの送信/自動適用なし
+- 紐付け：共通task IDがないため、時刻近接だけではChatGPT会話とツール履歴を結合しない。業務完了の独立証拠は未取得
+- 検証：合成データでのE2Eのみ。実会話エクスポートと実Desktop履歴の解析は未実施
+
+[ChatGPT Task Improvementの入力・出力・制約](chatgpt-task-improvement-20261120.md)。

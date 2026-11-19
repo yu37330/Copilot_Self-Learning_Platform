@@ -29,6 +29,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | A/B/C/Dの共通・ペア比較と検索評価 | 評価器を実装。実サービスを走らせた比較ではない |
 | Skillプレビューの出力・再検証 | 実装。既存のSkills/Instructionsに書き込まない |
 | セッション振り返り・指示改善 | Issue #31 Phase A: 兆候抽出、Phase B: 指示改善diffのオフライン独立検査、Phase C: 変更前後の未学習タスク比較・費用/手戻りの提出済み観測集計。実Copilotログ・LLM・改善効果は未検証 |
+| 第3系統：ChatGPT Task Improvement | Issue #41: ChatGPT会話の選択分岐＋Desktop Commander実行履歴をGit管理外で匿名集計。共通Task IDの自動紐付け・実業務成功判定・LLM評価は未実装 |
 | WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。Runtimeのモデル呼出経路は実装、実LLMは未検証 |
 | 単一Runtime（CodeZip）・S3起動Lambda | HTTP入口、既存処理の統合、依存同梱ZIP、CFN定義・モック結合検証。AWS実デプロイ未実施 |
 | Copilotへの動的注入・Workflow実行 | 未実装 |
@@ -133,6 +134,14 @@ python .\scripts\prepare_sessions.py --list
 ```
 
 詳細は[ネイティブCLI形式・安全制約](docs/cli-session-ingest-20261119.md)を参照してください。対象WindowsのCLI保存先は実機で未確認（現時点で既定フォルダは不在）です。VS Codeの Chat: Export Chat... JSONはCLIと異なる構造です。公式ソースの ChatModel.toExport() で確認できた発言・Markdown応答だけを、**明示的な同意とローカル機密辞書の下で**取り込む限定アダプターを追加しました。ツール実行・内部コンテキスト・未知の応答型は本文として取り込みません。利用手順は[VS Code手動JSON取込](docs/vscode-export-offline-ingest-20261119.md)を参照してください。実セッション形式・機密データ受入はまだ未検証です。
+
+### 第3系統：ChatGPT Task Improvement（Issue #41）
+
+ChatGPTの公式データエクスポートに含まれる会話JSONとDesktop Commanderのtool-history.jsonlを、利用者が指定したローカルパスから読み取って匿名集計します。会話原文・実行コマンド・ツール出力はプレビューへ転載しません。**同じ時刻の会話とツール実行を同一タスクとは推測しません**。共通Task ID・GitHubの成果物・業務完了検収は後続実装です。
+
+    python .\scripts\analyze_chatgpt_desktop_offline.py analyze --chatgpt-json "$env:USERPROFILE\private-export\conversations.json" --desktop-history "$env:USERPROFILE\.claude-server-commander\tool-history.jsonl" --policy "$env:USERPROFILE\private-export\policy.json" --out "$env:USERPROFILE\chatgpt-task-review-01" --acknowledge-local-analysis
+
+入力は機密を含みうるためGit管理外で管理し、明示的な同意が必要です。ChatGPTエクスポートの全バージョンには対応していません。機密辞書、入力形式、独立ハッシュ再検証、限界は[第3系統の利用ガイド](docs/chatgpt-task-improvement-20261120.md)を参照してください。合成テストのみ検証済みです。
 
 ## セッションのローカル準備
 
