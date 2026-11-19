@@ -25,7 +25,8 @@ def _model(value: Any) -> dict[str, Any]:
         "backend", "provider_family", "model_id", "max_input_tokens",
     }:
         raise InvalidData("生成/評価モデルの設定フィールドが不正です")
-    if (value["backend"] not in BACKENDS or value["provider_family"] not in FAMILIES
+    if (not isinstance(value["backend"], str) or value["backend"] not in BACKENDS
+            or not isinstance(value["provider_family"], str) or value["provider_family"] not in FAMILIES
             or not isinstance(value["model_id"], str) or not MODEL_ID.fullmatch(value["model_id"])
             or type(value["max_input_tokens"]) is not int
             or not 128 <= value["max_input_tokens"] <= MAX_INPUT_TOKENS):
