@@ -95,6 +95,8 @@ def grade_independent_review(request: dict[str, Any], reviewer_output: dict[str,
             or request.get("version") != VERSION
             or request.get("model_plan_sha256") != routing["plan_sha256"]
             or request.get("external_transfer_authorized") is not False
+            or request.get("network_calls") != 0
+            or request.get("generator_model") != routing["models"]["retrospective"]["generator"]
             or request.get("reviewer_model") != routing["models"]["retrospective"]["reviewer"]):
         raise InvalidData("独立レビュー要求とモデル構成が一致しません")
     if not isinstance(reviewer_output, dict) or set(reviewer_output) != {
