@@ -120,7 +120,7 @@ python .\scripts\probe_session_sources.py
 python .\scripts\prepare_sessions.py --list
 ```
 
-詳細は[ネイティブCLI形式・安全制約](docs/cli-session-ingest-20261119.md)を参照してください。対象WindowsのCLI保存先は実機で未確認（現時点で既定フォルダは不在）です。VS Codeの Chat: Export Chat... JSONは**別形式で、まだパーサー未実装**。VS Code exportをCopilot CLIイベントと推測して変換しません。
+詳細は[ネイティブCLI形式・安全制約](docs/cli-session-ingest-20261119.md)を参照してください。対象WindowsのCLI保存先は実機で未確認（現時点で既定フォルダは不在）です。VS Codeの Chat: Export Chat... JSONは**別形式で、まだパーサー未実装**。VS Code exportをCopilot CLIイベントと推測して変換しません。ユーザーが手動エクスポートしたJSONに対しては、内容を表示せず、既知キーの有無と型だけを判定する `scripts/inspect_vscode_export_schema.py --export <file> --acknowledge-local-inspection` も利用できます。
 
 ## セッションのローカル準備
 
