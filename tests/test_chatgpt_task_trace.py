@@ -126,9 +126,9 @@ class TaskTraceTests(unittest.TestCase):
         self.assertTrue(all(r["assessment"] == "heuristic_review_only" for r in report["recommendations"]))
 
     def test_chat_only_and_desktop_only(self):
-        for args in (["--chatgpt-json", str(self.chatpath)],
-                     ["--desktop-history", str(self.desktoppath)]):
-            output = self.root / ("out-"+str(len(args)))
+        for label, args in (("chat", ["--chatgpt-json", str(self.chatpath)]),
+                            ("desktop", ["--desktop-history", str(self.desktoppath)])):
+            output = self.root / ("out-" + label)
             with contextlib.redirect_stdout(io.StringIO()):
                 result = cli(["analyze", *args, "--policy", str(self.policy),
                               "--out", str(output), "--acknowledge-local-analysis"])
