@@ -118,7 +118,14 @@ def _inventory_paths(root: Path, surface: str = "copilot") -> list[str]:
         # Bounded depth: never traverse the whole workspace or hidden tool data.
         for depth in range(1, 4):
             for filename in ("AGENTS.md", "AGENTS.override.md"):
-                base.extend(root.glob("/".join(["*"] * depth + [filename])))
+                for candidate in root.glob("/".join(["*"] * depth + [filename])):
+                    parts = candidate.relative_to(root).parts[:-1]
+                    # ツール管理・依存物の隠しフォルダを指示対象にしない。
+                    if any(part.startswith(".") or part.casefold() in {
+                        "node_modules", "venv", "dist", "build", "__pycache__"
+                    } for part in parts):
+                        continue
+                    base.append(candidate)
     else:
         base.append(root / ".github" / "copilot-instructions.md")
         folders = (
