@@ -4,7 +4,7 @@
 
 ## Windowsで確認した実rolloutの状態
 
-DESKTOP-KM8CL39のローカルrolloutから古い1件を選び、読み取った情報をJSON構造の静的カテゴリだけに限定した。**本文・コマンド・ファイル名・モデル名はツール結果へ出していない**。ソースは204,738バイト／非空15レコード。session_meta=1、response_item=8、event_msg=3、turn_context=1、未知のtop-level=2。event_msg内の未分類タイプ=3、message本文partの型はinput_text=9、output_text=1。
+DESKTOP-KM8CL39のローカルrolloutから古い1件を選び、読み取った情報をJSON構造の静的カテゴリだけに限定した。**本文・コマンド・ファイル名・モデル名はツール結果へ出していない**。ソースは204,738バイト／非空15レコード。session_meta=1、response_item=8、event_msg=3、turn_context=1、未知のtop-level=2。event_msg内の未分類タイプ=3、message本文partの型はinput_text=9、output_text=1。response_item.messageの役割別件数はuser=2、assistant=1、developer=3であり、developerは本文取込対象に含まない。
 
 よって、Codexと互換の大枠を確認できたが、未知イベントが残るので**そのファイルの完全取込・意味的な失敗分析・機密安全性を保証しない**。実内容のPhase A/Phase B実行は未実施。
 
