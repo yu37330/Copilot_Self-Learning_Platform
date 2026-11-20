@@ -175,7 +175,7 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
             continue
         if top == "event_msg":
             subtype = payload.get("type")
-            known_event = telemetry.event(payload)
+            known_event = telemetry.event(payload, source_line=line_number)
             if subtype == "user_message":
                 text = payload.get("message")
                 if not isinstance(text, str) or not text.strip() or len(text) > MAX_EVENT_TEXT_CHARS:
