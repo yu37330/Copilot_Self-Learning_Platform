@@ -32,6 +32,34 @@ KNOWN_EVENT_TYPES = frozenset({
     "view_image_tool_call", "dynamic_tool_call_request",
     "dynamic_tool_call_response", "elicitation_request",
     "elicitation_abandoned", "apply_patch_approval_request",
+    # Codex protocol.rs 公式EventMsgの追加型。元payloadを内容として復元しない。
+    "network_approval_resolved", "patch_apply_begin", "patch_apply_updated",
+    "patch_apply_end", "turn_diff", "realtime_conversation_list_voices_response",
+    "plan_update", "shutdown_complete", "entered_review_mode",
+    "exited_review_mode", "raw_response_item", "raw_response_completed",
+    "private_session_event", "item_started", "item_completed",
+    "hook_started", "hook_completed", "agent_message_content_delta",
+    "plan_delta", "reasoning_content_delta", "reasoning_raw_content_delta",
+    "collab_agent_spawn_begin", "collab_agent_spawn_end",
+    "collab_agent_interaction_begin", "collab_agent_interaction_end",
+    "collab_waiting_begin", "collab_waiting_end",
+    "collab_close_begin", "collab_close_end",
+    "collab_resume_begin", "collab_resume_end", "sub_agent_activity",
+})
+# これらは本来の文脈（ツール、会話、思考、差分等）を含み得る。
+# 型を認識しても全会話を復元したと誤認しない。
+UNREPLAYED_EVENT_TYPES = frozenset({
+    "agent_message", "agent_message_delta", "agent_message_content_delta",
+    "agent_reasoning", "agent_reasoning_raw_content", "agent_reasoning_section_break",
+    "raw_response_item", "raw_response_completed", "private_session_event",
+    "plan_update", "plan_delta", "reasoning_content_delta",
+    "reasoning_raw_content_delta", "turn_diff", "item_started", "item_completed",
+    "hook_started", "hook_completed", "sub_agent_activity",
+    "collab_agent_spawn_begin", "collab_agent_spawn_end",
+    "collab_agent_interaction_begin", "collab_agent_interaction_end",
+    "collab_waiting_begin", "collab_waiting_end",
+    "collab_close_begin", "collab_close_end",
+    "collab_resume_begin", "collab_resume_end",
 })
 KNOWN_TOP_METADATA_TYPES = frozenset({
     "dynamic_tools_updated", "inter_agent_communication",
