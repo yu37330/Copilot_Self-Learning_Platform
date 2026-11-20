@@ -17,12 +17,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rollout", type=Path, required=True)
     parser.add_argument("--minimum-age-minutes", type=int, default=1440)
     parser.add_argument("--acknowledge-local-inspection", action="store_true")
+    parser.add_argument("--include-telemetry", action="store_true",
+                        help="本文を出さず既知のイベント/累積トークン/異常件数を集計")
     args = parser.parse_args(argv)
     try:
         # No read until affirmative opt-in.
         if not args.acknowledge_local_inspection:
             raise InvalidData("ローカル構造の診断には明示同意が必要です")
-        result = inspect_structure(args.rollout, minimum_age_minutes=args.minimum_age_minutes)
+        result = inspect_structure(
+            args.rollout, minimum_age_minutes=args.minimum_age_minutes,
+            include_telemetry=args.include_telemetry)
         print(json.dumps(result, sort_keys=True, ensure_ascii=False))
         return 0
     except (InvalidData, OSError, UnicodeError, ValueError, TypeError):
