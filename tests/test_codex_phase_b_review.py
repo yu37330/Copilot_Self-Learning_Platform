@@ -137,6 +137,8 @@ class CodexInstructionReviewTests(unittest.TestCase):
     def test_request_has_matching_codex_surface_and_evidence(self):
         req = review_request(self.sessions, self.inventory)
         self.assertEqual(req["data"]["instruction_inventory"], self.inventory["files"])
+        hints = {item["rule_id"]: item["target_hint"] for item in req["data"]["findings"]}
+        self.assertEqual(hints["role_boundary"], "configured_agent_role_manual_review")
         self.assertEqual(req["data"]["findings"][0]["rule_id"], "instruction_conflict")
         self.assertNotIn("Existing scoped agent guidance.", json.dumps(req))
         self.assertNotIn("test not run", json.dumps(req))
@@ -360,6 +362,7 @@ class CodexRealShapeProbeTests(unittest.TestCase):
         self.assertEqual(result["response_categories"]["reasoning"], 1)
         self.assertEqual(result["message_content_types"]["output_text"], 1)
         self.assertTrue(result["first_session_meta_with_id"])
+        self.assertEqual(result["message_role_categories"]["assistant"], 1)
         self.assertFalse(result["raw_text_exported"])
         self.assertNotIn("PRIVATE", json.dumps(result))
         self.assertNotIn("experimental-secret-event", json.dumps(result))
