@@ -41,6 +41,16 @@ Copy-Item .\examples\personal_local_model_request.synthetic.json "$env:USERPROFI
 
 ※ private-llmフォルダは先に作成する。モデル計画の2系統（knowledgeとretrospective）は、generatorとreviewerで異なるmodel_idを指定する必要がある。provider_familyは自己申告にすぎず、独立評価モデルの実提供元を検証したことにはならない。
 
+Windows PowerShell 5.1で Set-Content -Encoding UTF8 を使ってpolicy.json等を作ると、UTF-8のBOMが先頭に付く場合がある。既存の機密辞書検査はBOM付きJSONを拒否する。UTF-8 **BOMなし**で保存すること。たとえば既存ファイルをBOMなしで保存し直す場合、次のローカル操作を利用できる。
+
+~~~powershell
+$path = "$env:USERPROFILE\private-llm\policy.json"
+$body = [System.IO.File]::ReadAllText($path)
+[System.IO.File]::WriteAllText($path, $body, (New-Object System.Text.UTF8Encoding($false)))
+~~~
+
+初期の合成preflight実機確認でも、BOM付きpolicy.jsonでは送信前に拒否され、BOMなしに保存し直すと preflight_only_no_model_call で成功した（backend=codex_cli、role=generator、prompt_bytes=276、network_calls=0）。認証・モデル実行は行っていない。
+
 入力JSONの必須項目：
 - track は knowledge または retrospective
 - role は generator または reviewer
