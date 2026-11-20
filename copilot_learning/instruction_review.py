@@ -37,6 +37,13 @@ PATH_RULES = (
     re.compile(r"\.github/instructions/[A-Za-z0-9][A-Za-z0-9_.-]{0,72}\.instructions\.md"),
     re.compile(r"\.github/skills/[a-z][a-z0-9-]{0,50}/SKILL\.md"),
     re.compile(r"\.github/agents/[a-z][a-z0-9-]{0,50}\.agent\.md"),
+    # Codex: narrow path patterns only. Paths with traversal or links are still rejected.
+    re.compile(r"AGENTS\.override\.md"),
+    re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,40}/){1,3}AGENTS(?:\.override)?\.md"),
+    re.compile(r"\.agents/skills/[a-z][a-z0-9-]{0,50}/SKILL\.md"),
+    # Codex custom-agent TOML/config are INVENTORY ONLY: never proposed for edits.
+    re.compile(r"\.codex/config\.toml"),
+    re.compile(r"\.codex/agents/[a-z][a-z0-9-]{0,50}\.toml"),
 )
 
 # 疑わしい文面は正当な引用であっても人手確認に送り、改善パッチとして出さない。
@@ -87,16 +94,39 @@ def _safe_existing_file(root: Path, relative: str) -> Path:
     return path
 
 
-def _inventory_paths(root: Path) -> list[str]:
-    base = [
-        root / "AGENTS.md",
-        root / ".github" / "copilot-instructions.md",
-    ]
-    for folder, pattern in (
-        (root / ".github" / "instructions", "*.instructions.md"),
-        (root / ".github" / "skills", "*/SKILL.md"),
-        (root / ".github" / "agents", "*.agent.md"),
-    ):
+def _surface_from_sessions(sessions: list[dict[str, Any]]) -> str:
+    """Only explicitly Codex-origin normalized sessions enable Codex target rules."""
+    checked = _validated_sessions(sessions)
+    labels = {session["source_provenance"].get("source_format") for session in checked}
+    if labels == {"codex-rollout-jsonl-v1"}:
+        return "codex"
+    if "codex-rollout-jsonl-v1" in labels:
+        raise InvalidData("Codexと他製品を混在させた指示変更は禁止します")
+    return "copilot"
+
+
+def _inventory_paths(root: Path, surface: str = "copilot") -> list[str]:
+    if surface not in {"codex", "copilot"}:
+        raise InvalidData("指示ファイルの対象製品が不正です")
+    base = [root / "AGENTS.md"]
+    if surface == "codex":
+        base += [root / "AGENTS.override.md", root / ".codex" / "config.toml"]
+        folders = (
+            (root / ".agents" / "skills", "*/SKILL.md"),
+            (root / ".codex" / "agents", "*.toml"),
+        )
+        # Bounded depth: never traverse the whole workspace or hidden tool data.
+        for depth in range(1, 4):
+            for filename in ("AGENTS.md", "AGENTS.override.md"):
+                base.extend(root.glob("/".join(["*"] * depth + [filename])))
+    else:
+        base.append(root / ".github" / "copilot-instructions.md")
+        folders = (
+            (root / ".github" / "instructions", "*.instructions.md"),
+            (root / ".github" / "skills", "*/SKILL.md"),
+            (root / ".github" / "agents", "*.agent.md"),
+        )
+    for folder, pattern in folders:
         if folder.exists():
             _path(folder)
             if not folder.is_dir():
@@ -116,12 +146,13 @@ def _inventory_paths(root: Path) -> list[str]:
     return sorted(set(relatives))
 
 
-def instruction_inventory(root: Path, literals: list[str]) -> dict[str, Any]:
-    """実際の指示内容は返さず、読取可能なパス・サイズ・ハッシュを返す。"""
+def instruction_inventory(root: Path, literals: list[str], *,
+                          surface: str = "copilot") -> dict[str, Any]:
+    """Instruction SHA inventory; config files are read-only review references."""
     root = _safe_repo(root)
     result = []
     total = 0
-    names = _inventory_paths(root)
+    names = _inventory_paths(root, surface)
     if len(names) > MAX_INSTRUCTION_FILES:
         raise InvalidData("指示ファイルが上限件数を超えています")
     for name in names:
@@ -136,8 +167,11 @@ def instruction_inventory(root: Path, literals: list[str]) -> dict[str, Any]:
             raise InvalidData("指示ファイルはUTF-8である必要があります") from exc
         _scan_text(content, literals, proposed=False)
         result.append({"path": name, "sha256": digest(raw), "size_bytes": len(raw)})
-    return {"schema_version": "1.0", "record_type": "offline-instruction-inventory",
-            "files": result, "file_count": len(result)}
+    inventory = {"schema_version": "1.0", "record_type": "offline-instruction-inventory",
+                 "files": result, "file_count": len(result)}
+    if surface == "codex":
+        inventory["surface"] = "codex"
+    return inventory
 
 
 def _load_existing(root: Path, entry: dict[str, Any], literals: list[str]) -> str:
@@ -157,8 +191,9 @@ def _load_existing(root: Path, entry: dict[str, Any], literals: list[str]) -> st
 def review_request(sessions: list[dict[str, Any]], inventory: dict[str, Any]) -> dict[str, Any]:
     """実データや既存の指示本文を含まない、モデル/人手レビュー向けの構造化要求。"""
     report = analyze_sessions(sessions)
-    if inventory.get("record_type") != "offline-instruction-inventory":
-        raise InvalidData("不正な指示ファイル一覧です")
+    if (inventory.get("record_type") != "offline-instruction-inventory"
+            or inventory.get("surface", "copilot") != _surface_from_sessions(sessions)):
+        raise InvalidData("指示一覧の対象製品とセッションの出典が一致しません")
     return {
         "schema_version": "1.0", "record_type": "offline-retro-review-request",
         "system": (
@@ -191,12 +226,30 @@ def review_request(sessions: list[dict[str, Any]], inventory: dict[str, Any]) ->
     }
 
 
-def _allowed_target(rule_id: str, kind: str, path: str | None) -> bool:
+def _allowed_target(rule_id: str, kind: str, path: str | None,
+                    *, surface: str = "copilot") -> bool:
     if kind == "prompt_advice":
-        return rule_id == "explicit_correction" and path is None
+        return (rule_id in ({"explicit_correction", "role_boundary"} if surface == "codex"
+                            else {"explicit_correction"}) and path is None)
     if not isinstance(path, str) or not _target_allowed(path):
         return False
     if kind not in {"append_existing", "create_new"}:
+        return False
+    if surface == "codex":
+        agents = bool(re.fullmatch(
+            r"(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,40}/){0,3}AGENTS(?:\.override)?\.md", path))
+        skill = bool(re.fullmatch(
+            r"\.agents/skills/[a-z][a-z0-9-]{0,50}/SKILL\.md", path))
+        if rule_id == "repeatable_workflow":
+            return skill
+        if rule_id == "path_specific":
+            return agents and "/" in path
+        if rule_id in {"missing_verification", "instruction_conflict"}:
+            return agents
+        if rule_id == "tool_failure":
+            return agents or skill
+        # Custom-agent TOML (including model/permissions) is intentionally
+        # not patchable. role_boundary may only produce prompt_advice.
         return False
     if rule_id == "repeatable_workflow":
         return bool(re.fullmatch(r"\.github/skills/[a-z][a-z0-9-]{0,50}/SKILL\.md", path))
@@ -275,6 +328,9 @@ def grade_response(sessions: list[dict[str, Any]], inventory: dict[str, Any],
                    response: dict[str, Any], root: Path, literals: list[str]) -> tuple[dict[str, Any], str]:
     """独立検査: 外部モデルの肯定を採用・承認へ昇格させない。"""
     report = analyze_sessions(sessions)
+    surface = _surface_from_sessions(sessions)
+    if inventory.get("surface", "copilot") != surface:
+        raise InvalidData("指示ファイル一覧と対象セッションの製品が一致しません")
     if not isinstance(response, dict) or set(response) != {
         "schema_version", "record_type", "report_sha256", "inventory_sha256", "proposals"
     }:
@@ -300,7 +356,7 @@ def grade_response(sessions: list[dict[str, Any]], inventory: dict[str, Any],
         rule_id = item["rule_id"]
         path = item["target_path"]
         refs = item["evidence_ids"]
-        if (rule_id not in hits or not _allowed_target(rule_id, kind, path)
+        if (rule_id not in hits or not _allowed_target(rule_id, kind, path, surface=surface)
                 or not isinstance(refs, list) or not (1 <= len(refs) <= 12)
                 or len(set(refs)) != len(refs) or any(ref not in hits[rule_id] for ref in refs)):
             raise InvalidData("改善提案の分類・対象・引用IDに不整合があります")
@@ -375,7 +431,8 @@ def prepare_review(sessions: list[dict[str, Any]], root: Path,
                    policy: Path, response: dict[str, Any]) -> tuple[dict[str, Any], dict[str, bytes]]:
     """ポリシーと現行指示ファイルをスナップショットし、未適用プレビューを作る。"""
     terms, policy_sha = load_policy(_path(policy))
-    inventory = instruction_inventory(root, terms["sensitive_literals"])
+    inventory = instruction_inventory(root, terms["sensitive_literals"],
+                                      surface=_surface_from_sessions(sessions))
     req = review_request(sessions, inventory)
     review, patch = grade_response(sessions, inventory, response, root, terms["sensitive_literals"])
     files = {
@@ -460,7 +517,8 @@ def export_review_request(sessions: list[dict[str, Any]], root: Path,
                           policy: Path, destination: Path) -> dict[str, Any]:
     """モデル呼び出しなしのレビュー要求を、Git管理外の新規フォルダに保存する。"""
     terms, policy_sha = load_policy(_path(policy))
-    inventory = instruction_inventory(root, terms["sensitive_literals"])
+    inventory = instruction_inventory(root, terms["sensitive_literals"],
+                                      surface=_surface_from_sessions(sessions))
     request = review_request(sessions, inventory)
     body = json_bytes(request)
     if len(body) > MAX_OUTPUT_BYTES:
