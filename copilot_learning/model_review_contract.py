@@ -12,7 +12,9 @@ from .core import InvalidData, digest, json_bytes
 
 TRACKS = ("knowledge", "retrospective")
 MODEL_ROLES = ("generator", "reviewer")
-BACKENDS = frozenset({"bedrock", "openai_api", "other_offline"})
+BACKENDS = frozenset({
+    "bedrock", "openai_api", "codex_cli", "copilot_cli", "other_offline",
+})
 # 提供元の自己申告ラベル。AWS/各社のモデルカタログ照合は未実装。
 FAMILIES = frozenset({"anthropic", "amazon", "openai", "google", "meta", "mistral", "other"})
 MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}")
