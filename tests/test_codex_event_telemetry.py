@@ -1,13 +1,20 @@
 """Issue #46: Codex公式イベントの安全なローカルテレメトリ検証。"""
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
+import tempfile
+import time
 import unittest
+from pathlib import Path
 from copy import deepcopy
 
 from copilot_learning.codex_event_telemetry import CodexTelemetry
 from copilot_learning.codex_rollout import _parse
-from copilot_learning.codex_schema_probe import TOP_TYPES, EVENT_TYPES
+from copilot_learning.codex_schema_probe import TOP_TYPES, EVENT_TYPES, inspect_structure
+from scripts.inspect_codex_rollout_schema import main as schema_cli
 from copilot_learning.core import InvalidData
 
 
@@ -207,6 +214,38 @@ class CodexTelemetryTests(unittest.TestCase):
         self.assertEqual(records[-1]["type"], "codex.unrecognized_records")
         for forbidden in ("PRIVATE", "WORKSPACE STATE", "TOOL RESULT"):
             self.assertNotIn(forbidden, json.dumps(stats))
+
+    def test_telemetry_probe_is_explicit_and_never_outputs_content(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "rollout-synthetic.jsonl"
+            rows = message_fixture() + [
+                event("event_msg", {"type": "exec_command_end", "exit_code": 2,
+                                    "command": ["PRIVATE SHELL COMMAND"],
+                                    "aggregated_output": "PRIVATE COMMAND OUTPUT"}),
+                event("event_msg", {"type": "token_count",
+                                    "info": {"total_token_usage": tokens(900, 100)},
+                                    "rate_limits": {"plan_type": "PRIVATE"}}),
+            ]
+            source.write_bytes(encoded(rows))
+            os.utime(source, (time.time() - 86400 * 3, time.time() - 86400 * 3))
+            without = inspect_structure(source)
+            self.assertNotIn("event_telemetry", without)
+            with_telemetry = inspect_structure(source, include_telemetry=True)
+            t = with_telemetry["event_telemetry"]
+            self.assertEqual(t["latest_cumulative_token_usage"]["total_tokens"], 1000)
+            self.assertEqual(t["exec_command_end_nonzero_count"], 1)
+            self.assertEqual(t["review_candidates"][0]["source_lines"], [4])
+            self.assertFalse(t["business_completion_verified"])
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(schema_cli([
+                    "--rollout", str(source), "--acknowledge-local-inspection",
+                    "--include-telemetry",
+                ]), 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["telemetry_scope"], "fixed_numeric_fields_and_event_types_only")
+            self.assertNotIn("PRIVATE", stdout.getvalue())
+            self.assertNotIn(str(source), stdout.getvalue())
 
     def test_schema_probe_taxonomy_is_explicit_and_bounded(self):
         for known in ("token_usage_record", "dynamic_tools_updated",
