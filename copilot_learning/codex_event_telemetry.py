@@ -105,6 +105,13 @@ class CodexTelemetry:
         self.exec_command_nonzero = 0
         self.exec_command_zero = 0
         self.exec_command_status_unknown = 0
+        self.evidence_lines: dict[str, list[int]] = {}
+
+    def _mark(self, category: str, source_line: int | None) -> None:
+        if type(source_line) is int and source_line > 0:
+            collected = self.evidence_lines.setdefault(category, [])
+            if len(collected) < 12:
+                collected.append(source_line)
 
     def snapshot(self, data: Any, source: str) -> None:
         found = _usage(data)
@@ -115,13 +122,15 @@ class CodexTelemetry:
             self.usage_latest = found
             self.usage_source = source
 
-    def event(self, payload: dict[str, Any]) -> bool:
+    def event(self, payload: dict[str, Any], *, source_line: int | None = None) -> bool:
         """認識済みEventMsgならTrue。未知型は呼出側が欠落として計上する。"""
         kind = payload.get("type")
         if not isinstance(kind, str) or kind not in KNOWN_EVENT_TYPES:
             return False
         # ユーザー発言は既存の文章解析器が扱う。ここでは件数のみ。
         self.events[kind] += 1
+        if kind in {"error", "turn_aborted", "stream_error"}:
+            self._mark(kind, source_line)
         if kind == "token_count":
             info = payload.get("info")
             self.snapshot(info.get("total_token_usage") if isinstance(info, dict) else None,
@@ -130,6 +139,7 @@ class CodexTelemetry:
             error = payload.get("error")
             if isinstance(error, dict):
                 self.explicit_turn_error += 1
+                self._mark("turn_complete_with_error", source_line)
             elif error is not None:
                 self.events["invalid_terminal_error_shape"] += 1
         elif kind == "exec_command_end":
@@ -139,6 +149,7 @@ class CodexTelemetry:
                     self.exec_command_zero += 1
                 else:
                     self.exec_command_nonzero += 1
+                    self._mark("exec_command_nonzero", source_line)
             else:
                 self.exec_command_status_unknown += 1
         return True
@@ -150,7 +161,27 @@ class CodexTelemetry:
 
     def report(self) -> dict[str, Any]:
         """nullは未観測を意味し、0トークンや失敗と解釈しない。"""
+        candidate_defs = (
+            ("exec_command_nonzero", self.exec_command_nonzero,
+             "コマンドの非ゼロ終了理由と再試行の妥当性を原本で確認する"),
+            ("turn_complete_with_error", self.explicit_turn_error,
+             "Codexが報告したターン終了エラーの原因を原本で確認する"),
+            ("turn_aborted", self.events["turn_aborted"],
+             "中断が利用者操作か回復不能かを原本で確認する"),
+            ("stream_error", self.events["stream_error"],
+             "ストリーム通信エラー後の回復・再試行を確認する"),
+            ("error", self.events["error"],
+             "Codexの明示エラーと最終的な回復を区別して確認する"),
+        )
+        suggestions = [
+            {"rule_id": key, "signal_count": count,
+             "source_lines": self.evidence_lines.get(key, []),
+             "evidence_sample_truncated": count > len(self.evidence_lines.get(key, [])),
+             "suggestion": text, "assessment": "heuristic_review_only"}
+            for key, count, text in candidate_defs if count
+        ]
         return {
+            "review_candidates": suggestions,
             "observed_event_types": dict(sorted(self.events.items())),
             "turn_started_count": (self.events["task_started"] +
                                    self.events["turn_started"]),
