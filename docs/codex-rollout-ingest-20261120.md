@@ -63,7 +63,7 @@ python .\scripts\import_codex_rollout_offline.py verify --rollout "C:\path\to\ro
 python .\scripts\session_retro_offline.py --staging "$env:USERPROFILE\codex-analysis-private\run-001" --fingerprint "(取込結果のsession_fingerprint)" --out "$env:USERPROFILE\codex-analysis-private\retro-001"
 ~~~
 
-その後、既存のPhase Bのinstruction_review_offline.pyでAGENTS.mdやSkills等の指示版を棚卸しして差分候補を検討できる。ただし自動的なLLM推論・編集はこの取込機能の対象外。
+Codex由来のセッションでは、Session Retrospectiveの提案先はAGENTS.md、階層別AGENTS.md、.agents/skills/NAME/SKILL.md等に切り替える。**ただし現行Phase Bの指示ファイル棚卸し/変更許可はCopilot向けが中心で、CodexのSkills/エージェント設定への差分生成は未対応**。既存のPhase Bで安全に処理できるAGENTS.md等の範囲から確認し、Codex専用Skill差分の実装は後続の別レビューを必要とする。LLM推論・自動編集はこの取込機能の対象外。
 
 ## 制限
 
