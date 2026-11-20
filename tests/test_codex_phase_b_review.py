@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from copilot_learning.codex_schema_probe import inspect_structure
-from copilot_learning.core import InvalidData, digest, json_bytes, content_fingerprint
+from copilot_learning.core import InvalidData, digest, json_bytes, content_fingerprint, read_archive, normalize_events
 from copilot_learning.instruction_review import (
     instruction_inventory, review_request, grade_response, export_review,
     export_review_request, verify_review,
@@ -229,6 +229,80 @@ class CodexInstructionReviewTests(unittest.TestCase):
                                  receipt["manifest_sha256"])
         self.assertEqual(verified["status"], "verified_review_only")
         self.assertFalse(verified["changes_applied"])
+
+    def test_synthetic_codex_zip_to_phase_b_cli_end_to_end(self):
+        # Build a synthetic standard archive carrying an explicit Codex source marker.
+        from scripts.prepare_sessions import build_archive
+        source = {"type": "message", "role": "user",
+                  "text": "テストしていないのに完了にしないで",
+                  "timestamp": "2026-11-20T01:30:00Z"}
+        body = (json.dumps(source, ensure_ascii=False) + "\n").encode("utf-8")
+        files = [{"name": "events.jsonl", "sha256": digest(body),
+                  "size_bytes": len(body)}]
+        fp = content_fingerprint(files)
+        zip_content = build_archive([("events.jsonl", body)])
+        staging = self.base / "staging"
+        staging.mkdir()
+        (staging / f"session-{fp}.zip").write_bytes(zip_content)
+        (staging / f"session-{fp}.manifest.json").write_bytes(json_bytes({
+            "schema_version": "1.0", "record_type": "copilot-session-archive",
+            "session_fingerprint": fp, "source_format": "codex-rollout-jsonl-v1",
+            "archive_file": f"session-{fp}.zip", "archive_sha256": digest(zip_content),
+            "contents": files, "prepared_at_utc": "2026-11-20T01:30:00Z",
+        }))
+        manifest, evs = read_archive(staging, fp)
+        normalized = normalize_events(manifest, evs)
+        self.assertEqual(normalized["source_provenance"]["source_format"],
+                         "codex-rollout-jsonl-v1")
+        base_args = [
+            "--staging", str(staging), "--fingerprint", fp,
+            "--repo", str(self.repo), "--policy", str(self.policy),
+        ]
+        out_req = self.base / "cli-req"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(review_cli(["request", *base_args, "--out", str(out_req)]), 0)
+        request = json.loads((out_req / "reviewer-request.preview.json").read_text("utf-8"))
+        self.assertEqual({f["rule_id"] for f in request["data"]["findings"]},
+                         {"missing_verification"})
+        inventory = {
+            e["path"]: e["sha256"] for e in request["data"]["instruction_inventory"]
+        }
+        self.assertIn(".agents/skills/existing/SKILL.md", inventory)
+        reply = {
+            "schema_version": "1.0", "record_type": "offline-retro-proposals",
+            "report_sha256": request["data"]["report_sha256"],
+            "inventory_sha256": request["data"]["inventory_sha256"],
+            "proposals": [{
+                "rule_id": "missing_verification", "kind": "append_existing",
+                "target_path": "AGENTS.md", "expected_sha256": inventory["AGENTS.md"],
+                "evidence_ids": request["data"]["findings"][0]["evidence_ids"],
+                "hypothesis": "完了報告前の検証条件が弱い可能性がある。",
+                "proposed_block": "Report tests as verified only after execution.",
+                "expected_benefit": "検証なしでの完了主張が減る可能性。",
+                "validation": "合成課題で完了・未完了の区別を検証する。",
+            }],
+        }
+        response = self.base / "proposal.json"
+        response.write_bytes(json_bytes(reply))
+        out_grade = self.base / "cli-grade"
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            self.assertEqual(review_cli([
+                "grade", *base_args, "--proposal", str(response),
+                "--out", str(out_grade),
+            ]), 0)
+        receipt = json.loads(printed.getvalue())
+        self.assertIn("+++ b/AGENTS.md",
+                      (out_grade / "changes.preview.diff").read_text("utf-8"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(review_cli([
+                "verify", *base_args, "--proposal", str(response),
+                "--out", str(out_grade),
+                "--expected-manifest-sha256", receipt["manifest_sha256"],
+            ]), 0)
+        self.assertFalse((self.repo / ".agents" / "skills" / "review-loop").exists())
+        self.assertNotIn("Report tests as verified",
+                         (self.repo / "AGENTS.md").read_text("utf-8"))
 
     def test_harmful_skill_content_is_rejected(self):
         candidate = self._skill()
