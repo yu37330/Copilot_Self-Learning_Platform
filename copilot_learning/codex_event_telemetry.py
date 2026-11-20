@@ -90,7 +90,7 @@ class CodexTelemetry:
     def event(self, payload: dict[str, Any]) -> bool:
         """認識済みEventMsgならTrue。未知型は呼出側が欠落として計上する。"""
         kind = payload.get("type")
-        if kind not in KNOWN_EVENT_TYPES:
+        if not isinstance(kind, str) or kind not in KNOWN_EVENT_TYPES:
             return False
         # ユーザー発言は既存の文章解析器が扱う。ここでは件数のみ。
         self.events[kind] += 1
