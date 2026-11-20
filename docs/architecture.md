@@ -97,3 +97,12 @@ Copilot専用の①知識学習系と②Session Retrospectiveに加えて、Chat
 - 検証：合成データでのE2Eのみ。実会話エクスポートと実Desktop履歴の解析は未実施
 
 [ChatGPT Task Improvementの入力・出力・制約](chatgpt-task-improvement-20261120.md)。
+
+
+## 追記（2026-11-20、Issue #46）：Codex rolloutを同じ学習経路へ接続
+
+Codex CLIおよび対応するローカル版が保存する ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl の timestamp/type/payload を厳格なallowlistで解析し、既存Session Retrospectiveと後段のPhase B指示改善で使える標準events.jsonl/ZIP/manifestへ部分変換するコードを追加した。
+
+流れ：利用者がファイルを明示選択 → Git管理外で機密語辞書と同意を確認 → user_message / assistant output_textを選別 → ツール呼び出しは固定カテゴリ件数だけを記録（コマンド引数・結果・内部推論・cwd/初期指示は未保存） → Session Retrospectiveの規則ベース改善候補 → ローカルmanifest/receipt SHAで改変照合。
+
+実Windows PCには291件のrolloutが存在することをメタデータで確認したが、実セッションの本文は読んでいない。実LLM評価、Codexの実成果改善、タスク完了判定、Codexアプリの全バージョンの互換性は未実証。AWS接続・CI・Skillsの自動適用は追加しない。詳細は codex-rollout-ingest-20261120.md。
