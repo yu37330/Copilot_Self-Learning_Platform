@@ -23,6 +23,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | 範囲 | 状態 |
 |---|---|
 | セッション選別・ZIP化・SHA検証・イベント正規化 | 合成形式・CLIネイティブ形式に加え、VS Codeの公式toExport JSONの限定テキスト部分から安全なZIPを生成。合成テスト済み。実Copilot利用者データでは未検証 |
+| Codexのローカルrollout取込 | Issue #46: 公式Codexのrollout JSONLから限定テキストを安全に抽出し、Session Retrospectiveへ接続。実Codex保存先はメタデータのみ確認、本文の互換性は未検証 |
 | Memory投入計画・送信データ固定・機密語検査・署名承認検証 | オフライン実装。組織の認証と実送信は未接続 |
 | 候補単位の証拠・反証評価、意味レビューの安全側判定 | 実装。実モデルでの精度は未検証 |
 | SQLite知識台帳、版管理、日本語検索 | 実装。active化は自己申告レビューであり本人/組織による正式承認ではない |
@@ -150,6 +151,15 @@ ChatGPTの公式データエクスポートに含まれる会話JSONとDesktop C
     python .\scripts\bind_chatgpt_task_trace_offline.py index --chatgpt-json "$env:USERPROFILE\private-export\conversations.json" --desktop-history "$env:USERPROFILE\private-export\tool-history.jsonl" --policy "$env:USERPROFILE\private-export\policy.json" --out "$env:USERPROFILE\cti-ref-index-01" --acknowledge-local-analysis
 
 利用者がインデックスを見て作るTask manifestを使ったbind/verifyは[Task ID紐づけガイド](docs/chatgpt-task-trace-linking-20261120.md)に記載。原文・コマンド・会話タイトルは出力しません。実ユーザーデータを使った互換性・業務完了の独立確認は未検証です。
+
+### Codexの普段のセッションも改善対象にする（Issue #46）
+
+Codex CLIや対応するローカルセッションのrollout-*.jsonlを、明示的に選択してオフラインで分析できる経路を追加しました。Codexのuser_messageとassistant output_textだけを取り込み、ツール引数/実行結果・内部推論・作業ディレクトリ・初期指示は出力しません。既存Session Retrospectiveの7種類の規則へ接続し、AGENTS.md/Skills等の改善候補を確認できます。
+
+    python .\scripts\probe_codex_sessions.py
+    python .\scripts\import_codex_rollout_offline.py import --rollout "C:\path\to\rollout-...jsonl" --policy "$env:USERPROFILE\codex-analysis-private\policy.json" --out "$env:USERPROFILE\codex-analysis-private\run-001" --acknowledge-private-local-import
+
+入力元と保存先はGit管理外。**保存ZIPには選別した発言が含まれるため、機密情報として取り扱うこと。** Windows実機の保存先に291件（約158MB）のrolloutが存在することを本文未読で確認しましたが、実セッションのJSON本文による互換性・性能改善は未検証です。使用手順と安全制約は[Codex取込ガイド](docs/codex-rollout-ingest-20261120.md)を参照してください。
 
 ## セッションのローカル準備
 

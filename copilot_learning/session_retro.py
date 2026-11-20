@@ -150,9 +150,24 @@ def _validated_sessions(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(result, key=lambda item: item["session_fingerprint"])
 
 
+# Codexで実際に認識される指示先。通常のCopilotセッションの扱いは従来どおり。
+CODEX_TARGETS = {
+    "instruction_conflict": "AGENTS.md",
+    "role_boundary": ".codex/agents/NAME.toml",
+    "path_specific": "path/to/AGENTS.md",
+    "missing_verification": "AGENTS.md",
+    "repeatable_workflow": ".agents/skills/NAME/SKILL.md",
+    "explicit_correction": "prompt",
+    "tool_failure": "test_or_skill",
+}
+
+
 def analyze_sessions(sessions: list[dict[str, Any]]) -> dict[str, Any]:
     """限定的な規則で候補を抽出。根本原因や改善効果を実測したとは扱わない。"""
     valid = _validated_sessions(sessions)
+    # 複数の異種セッションを一括集計した場合は提案先を決め打ちしない。
+    source_formats = {s["source_provenance"].get("source_format") for s in valid}
+    codex_only = source_formats == {"codex-rollout-jsonl-v1"}
     matches: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for session in valid:
         fp = session["session_fingerprint"]
@@ -167,7 +182,7 @@ def analyze_sessions(sessions: list[dict[str, Any]]) -> dict[str, Any]:
             continue
         findings.append({
             "rule_id": rule["id"],
-            "target": rule["target"],
+            "target": CODEX_TARGETS.get(rule["id"], rule["target"]) if codex_only else rule["target"],
             "title": rule["title"],
             "recommendation": rule["recommendation"],
             "validation": rule["validation"],
@@ -190,6 +205,8 @@ def analyze_sessions(sessions: list[dict[str, Any]]) -> dict[str, Any]:
             for session in valid
         ],
         "coverage": "partial_unrecognized_events" if any(s["skipped_event_count"] for s in valid) else "known_events_only",
+        "target_surface": ("codex" if codex_only else
+                           "mixed_or_unspecified" if len(source_formats) > 1 else "copilot_or_unspecified"),
         "findings": findings,
         "finding_count": len(findings),
         "status": "manual_review_required",
