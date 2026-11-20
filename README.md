@@ -167,6 +167,12 @@ Codex由来の検証済みsession ZIPを選ぶと、Codex用のAGENTS.md・階�
 
 実機の古いrollout1件（204,738バイト、15レコード）の**イベント構造だけをローカルで確認**しました。未知top-level=2件、未知event_msg=3件があり、内容の完全取込・原因分析は未検証です。会話本文・コマンドは出力していません。構造診断の安全なCLI、Phase Bのrequest/grade/verify、利用制限は[Codex Phase Bと構造診断](docs/codex-phase-b-review-20261120.md)を参照してください。
 
+### Codexイベント分析：ターン状態・累積トークン・エラー候補
+
+Codex rolloutから、公式EventMsgのタスク開始/終了、warning/error、stream_error、中断、シェル終了コード、累積トークンusageを**固定カテゴリと数値だけ**で集計できます。最後の累積usageを保持し、履歴中のsnapshotを足し合わせない設計です。エラー候補には最大12件のJSONL元行番号だけを残し、コマンドや会話本文を出力しません。Codexのターン完了は業務完了とは異なり、改善効果や請求額は未検証です。
+
+実PCの古いrollout1件では、以前の未知top-level2件がtoken_usage_record / world_state、未知event_msg3件がtask_started / item_completed×2と分類できました。イベント型の認識が進んでも内部内容は復元していません。詳細は[Codexイベントテレメトリ](docs/codex-event-telemetry-20261120.md)。
+
 ## セッションのローカル準備
 
 ```powershell
