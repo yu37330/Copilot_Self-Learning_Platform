@@ -62,6 +62,13 @@ class CodexTelemetryTests(unittest.TestCase):
         self.assertFalse(t["task_outcome_verified"])
         self.assertFalse(t["business_completion_verified"])
         self.assertFalse(t["causal_improvement_established"])
+        review = {row["rule_id"]: row for row in t["review_candidates"]}
+        self.assertEqual(review["turn_complete_with_error"]["source_lines"], [6])
+        self.assertEqual(review["turn_aborted"]["source_lines"], [7])
+        self.assertEqual(review["error"]["source_lines"], [9])
+        self.assertEqual(review["stream_error"]["source_lines"], [10])
+        self.assertTrue(all(row["assessment"] == "heuristic_review_only"
+                            for row in review.values()))
         self.assertNotIn("unknown_event_msg_type", stat["unsupported_categories"])
         for forbidden in ("PRIVATE", "SECRET-ID", "SECOND-ID"):
             self.assertNotIn(forbidden, json.dumps(stat))
@@ -124,6 +131,8 @@ class CodexTelemetryTests(unittest.TestCase):
         self.assertEqual(t["exec_command_end_without_numeric_exit_code"], 1)
         self.assertFalse(t["tool_outcome_verified"])
         self.assertFalse(t["task_outcome_verified"])
+        self.assertEqual(t["review_candidates"][0]["rule_id"], "exec_command_nonzero")
+        self.assertEqual(t["review_candidates"][0]["source_lines"], [5])
         self.assertNotIn("PRIVATE", json.dumps(stat))
 
     def test_known_rollout_metadata_ignored_unknown_context_marked(self):
@@ -173,6 +182,31 @@ class CodexTelemetryTests(unittest.TestCase):
         _, stat, _ = _parse(encoded(rows), [])
         self.assertEqual(stat["event_telemetry"]["turn_started_count"], 1)
         self.assertEqual(stat["event_telemetry"]["turn_complete_record_count"], 1)
+
+    def test_documented_item_completed_is_known_but_content_partial(self):
+        rows = message_fixture() + [
+            event("event_msg", {"type": "task_started", "turn_id": "PRIVATE"}),
+            event("event_msg", {"type": "item_completed",
+                                "item": {"arguments": "PRIVATE TOOL ARGUMENTS"}}),
+            event("event_msg", {"type": "item_completed",
+                                "item": {"result": "PRIVATE TOOL RESULT"}}),
+            event("world_state", {"state": "PRIVATE WORKSPACE STATE"}),
+            event("token_usage_record", {
+                "thread_token_usage": tokens(100, 12),
+                "root_turn_id": "PRIVATE",
+            }),
+        ]
+        records, stats, _ = _parse(encoded(rows), [])
+        self.assertNotIn("unknown_event_msg_type", stats["unsupported_categories"])
+        self.assertNotIn("unknown_top_type", stats["unsupported_categories"])
+        self.assertEqual(stats["unsupported_categories"]["documented_event_context_not_replayed"], 2)
+        self.assertEqual(stats["unsupported_categories"]["documented_context_not_replayed"], 1)
+        self.assertEqual(stats["event_telemetry"]["turn_started_count"], 1)
+        self.assertEqual(stats["event_telemetry"]["latest_cumulative_token_usage"]["total_tokens"], 112)
+        self.assertEqual(stats["coverage"], "partial_unknown_or_context")
+        self.assertEqual(records[-1]["type"], "codex.unrecognized_records")
+        for forbidden in ("PRIVATE", "WORKSPACE STATE", "TOOL RESULT"):
+            self.assertNotIn(forbidden, json.dumps(stats))
 
     def test_schema_probe_taxonomy_is_explicit_and_bounded(self):
         for known in ("token_usage_record", "dynamic_tools_updated",
