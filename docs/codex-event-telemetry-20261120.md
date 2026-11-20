@@ -35,12 +35,16 @@ Codexのtoken_countとtoken_usage_recordは**累積使用量**を含むためス
 
 DESKTOP-KM8CL39で以前確認した古いrollout1件（204,738バイト・15レコード）を、ローカルで既知の型だけ照合した。以前の未知top-level2件は**token_usage_record 1件とworld_state 1件**、未知event_msg3件は**task_started 1件とitem_completed 2件**に分類できた。
 
-ただし、world_state/item_completedの中身は再現せず、原本の会話を使った意味的な失敗分析や実トークンの集計はまだしていない。
+ただし、world_state/item_completedの中身は再現せず、原本の会話を使った意味的な失敗分析はしていない。
+
+その後、同じファイルに対して本文非出力のオプションを明示して**固定数値だけの実機テレメトリ確認**を行った。Codex記録上の最新累積使用量はinput=27,496、output=158、total=27,654、キャッシュinput=0、reasoning output=0。snapshot観測1件、task_started=1、item_completed=2、明示的error=0、exec_command_endは観測0、task_completeは観測0。これは**対象rollout1件の観測値**であり、全291件の結果、請求金額、実行成功率、ユーザー依頼の達成ではない。実ファイルのメッセージ本文/コマンド/ファイル名/モデル名はツール結果に含めていない。
 
 構造診断CLI：
 
 ~~~powershell
 python .\scripts\inspect_codex_rollout_schema.py --rollout "C:\path\to\rollout-....jsonl" --minimum-age-minutes 1440 --acknowledge-local-inspection
+# 累積使用量・異常シグナルも匿名で確認する場合にだけ明示的に指定
+python .\scripts\inspect_codex_rollout_schema.py --rollout "C:\path\to\rollout-....jsonl" --minimum-age-minutes 1440 --acknowledge-local-inspection --include-telemetry
 ~~~
 
 ## 利用
