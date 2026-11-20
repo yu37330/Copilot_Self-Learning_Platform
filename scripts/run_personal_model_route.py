@@ -131,7 +131,7 @@ def _verify(args: argparse.Namespace, scope: dict[str, Any]) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("preflight", "run", "verify"))
+    parser.add_argument("action", choices=("preflight", "run", "verify", "export-json"))
     parser.add_argument("--plan", required=True, type=Path)
     parser.add_argument("--request", required=True, type=Path)
     parser.add_argument("--policy", required=True, type=Path)
@@ -139,22 +139,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--preflight", type=Path)
     parser.add_argument("--approved-scope-sha256")
     parser.add_argument("--expected-manifest-sha256")
+    parser.add_argument("--output-json", type=Path,
+                        help="verified model responseを既存Phase Bへ渡すための新規非承認JSON")
     parser.add_argument("--acknowledge-external-send", action="store_true")
     parser.add_argument("--timeout", type=int, default=120)
     args = parser.parse_args(argv)
     try:
         if args.action == "preflight":
             if (args.acknowledge_external_send or args.preflight is not None
-                    or args.approved_scope_sha256 or args.expected_manifest_sha256):
+                    or args.approved_scope_sha256 or args.expected_manifest_sha256
+                    or args.output_json is not None):
                 raise InvalidData("preflightでは実行・承認引数を受け付けません")
         elif args.action == "run":
             # Fail before opening the private request for accidental runs.
             if not (args.acknowledge_external_send and args.preflight
-                    and args.approved_scope_sha256 and not args.expected_manifest_sha256):
+                    and args.approved_scope_sha256 and not args.expected_manifest_sha256
+                    and args.output_json is None):
                 raise InvalidData("外部送信には事前SHA・明示同意が必要")
         elif (not args.preflight or not args.expected_manifest_sha256
-              or args.approved_scope_sha256 or args.acknowledge_external_send):
-            raise InvalidData("verifyは独立manifest SHAとpreflightのみ指定してください")
+              or args.approved_scope_sha256 or args.acknowledge_external_send
+              or (args.action == "export-json") != bool(args.output_json)):
+            raise InvalidData("verify/export-jsonは独立manifest SHAとpreflightが必要")
         plan, request, scope = _current(args)
         if args.action == "preflight":
             _write(args.out, {PREFLIGHT: json_bytes(scope)})
@@ -183,6 +188,23 @@ def main(argv: list[str] | None = None) -> int:
             }
         else:
             result = _verify(args, scope)
+            if args.action == "export-json":
+                # No provider call: extract previously verified, untrusted JSON only.
+                extracted = _read_result(_outside(args.out) / RESPONSE)["response"]
+                target = _outside(args.output_json)
+                if target.suffix.lower() != ".json" or target.exists():
+                    raise InvalidData("JSONを既存ファイルへ上書きできません")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with target.open("xb") as handle:
+                    handle.write(json_bytes(extracted))
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                target.chmod(0o400)
+                result = {
+                    "status": "untrusted_json_exported_for_existing_phase_b_checks",
+                    "response_sha256": digest(json_bytes(extracted)),
+                    "approved_for_instructions": False, "network_calls": 0,
+                }
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except (InvalidData, OSError, ValueError, TypeError, UnicodeError):
