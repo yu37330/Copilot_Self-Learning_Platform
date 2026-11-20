@@ -318,6 +318,14 @@ class RouterTests(unittest.TestCase):
         report = json.loads(file.read_text("utf-8"))
         self.assertEqual(report["response"], {"candidates": []})
         self.assertFalse(report["learning_effect_verified"])
+        export = self.root / "raw-qa-proposal.json"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(command([
+                "export-json", *self._args(), "--preflight", str(self.preflight),
+                "--expected-manifest-sha256", manifest_sha, "--out", str(self.out),
+                "--output-json", str(export),
+            ]), 0)
+        self.assertEqual(json.loads(export.read_text("utf-8")), {"candidates": []})
 
     def test_modified_response_breaks_local_verify(self):
         approved = self._preflight()
@@ -340,6 +348,16 @@ class RouterTests(unittest.TestCase):
                 "verify", *self._args(), "--preflight", str(self.preflight),
                 "--expected-manifest-sha256", sha, "--out", str(self.out),
             ]), 2)
+
+    def test_export_json_before_verified_response_is_blocked(self):
+        self._preflight()
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(command([
+                "export-json", *self._args(), "--preflight", str(self.preflight),
+                "--expected-manifest-sha256", "a"*64, "--out", str(self.out),
+                "--output-json", str(self.root / "stolen.json"),
+            ]), 2)
+        self.assertFalse((self.root / "stolen.json").exists())
 
     def test_git_directories_are_rejected(self):
         repo = self.root / "repo"
