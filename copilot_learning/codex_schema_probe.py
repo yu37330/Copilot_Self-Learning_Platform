@@ -11,10 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from .codex_rollout import _source, MAX_LINES
+from .codex_event_telemetry import KNOWN_EVENT_TYPES, KNOWN_TOP_METADATA_TYPES
 from .core import InvalidData
 
-TOP_TYPES = {"session_meta", "event_msg", "response_item", "turn_context", "compacted"}
-EVENT_TYPES = {"user_message", "agent_message", "turn_aborted", "error", "token_count"}
+TOP_TYPES = {"session_meta", "event_msg", "response_item", "turn_context", "compacted"} | KNOWN_TOP_METADATA_TYPES
+EVENT_TYPES = KNOWN_EVENT_TYPES
 RESPONSE_TYPES = {"message", "function_call", "function_call_output",
                   "custom_tool_call", "custom_tool_call_output", "reasoning"}
 MAX_SCHEMA_PROBE = 16 * 1024 * 1024
