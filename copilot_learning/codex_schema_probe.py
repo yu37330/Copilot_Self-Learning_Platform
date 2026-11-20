@@ -58,10 +58,12 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
             has_meta = isinstance(payload.get("id"), str)
         if cat == "event_msg":
             event_kind = payload.get("type")
-            events[event_kind if event_kind in EVENT_TYPES else "other_event_type"] += 1
+            events[event_kind if isinstance(event_kind, str) and event_kind in EVENT_TYPES
+                   else "other_event_type"] += 1
         if cat == "response_item":
             response_kind = payload.get("type")
-            responses[response_kind if response_kind in RESPONSE_TYPES else "other_response_type"] += 1
+            responses[response_kind if isinstance(response_kind, str) and response_kind in RESPONSE_TYPES
+                      else "other_response_type"] += 1
             if response_kind == "message":
                 role = payload.get("role")
                 roles[role if role in {"user", "assistant", "system", "developer"}
@@ -72,7 +74,7 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
                 else:
                     for item in contents:
                         kind = item.get("type") if isinstance(item, dict) else None
-                        if kind in {"input_text", "output_text"}:
+                        if isinstance(kind, str) and kind in {"input_text", "output_text"}:
                             elements[kind] += 1
                         else:
                             elements["other_content_part"] += 1
