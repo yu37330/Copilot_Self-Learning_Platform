@@ -21,6 +21,7 @@ from .core import (
 from .privacy_scan import BUILTIN_RULES, load_policy
 from .codex_event_telemetry import (
     CodexTelemetry, KNOWN_TOP_METADATA_TYPES, UNREPLAYED_TOP_CONTEXT,
+    UNREPLAYED_EVENT_TYPES,
 )
 from .session_retro import analyze_sessions
 from .skill_preview import ROOT, RESERVED, _path
@@ -191,8 +192,10 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
                 errored_or_interrupted += 1
                 ignored["agent_error_or_interrupt"] += 1
             elif known_event:
-                # Lifecycle / token telemetry is counted without interpreting its text.
+                # 既知型でもtool/思考/役割などの中身を復元していない場合は部分カバレッジ。
                 ignored["known_event_msg_telemetry_only"] += 1
+                if subtype in UNREPLAYED_EVENT_TYPES:
+                    unsupported["documented_event_context_not_replayed"] += 1
             else:
                 # Previously this was silently ignored and incorrectly looked complete.
                 unsupported["unknown_event_msg_type"] += 1
