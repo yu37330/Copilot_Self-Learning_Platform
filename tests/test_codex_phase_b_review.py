@@ -134,6 +134,20 @@ class CodexInstructionReviewTests(unittest.TestCase):
         self.assertNotIn("COPILOT-ONLY-INSTRUCTION", json.dumps(inv))
         self.assertEqual(inv["file_count"], len(inv["files"]))
 
+    def test_nested_agent_inventory_ignores_hidden_and_vendor_directories(self):
+        ignored = (
+            self.repo / ".agents" / "skills" / "existing" / "AGENTS.md",
+            self.repo / "node_modules" / "package" / "AGENTS.md",
+        )
+        for file in ignored:
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("Do not import generated vendor guidance.\n", encoding="utf-8")
+        refreshed = instruction_inventory(self.repo, [], surface="codex")
+        paths = {row["path"] for row in refreshed["files"]}
+        self.assertNotIn(".agents/skills/existing/AGENTS.md", paths)
+        self.assertNotIn("node_modules/package/AGENTS.md", paths)
+        self.assertIn(".agents/skills/existing/SKILL.md", paths)
+
     def test_request_has_matching_codex_surface_and_evidence(self):
         req = review_request(self.sessions, self.inventory)
         self.assertEqual(req["data"]["instruction_inventory"], self.inventory["files"])
