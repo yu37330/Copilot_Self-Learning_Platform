@@ -104,7 +104,9 @@ class RouterTests(unittest.TestCase):
                                       "--out", str(self.preflight)]), 0)
         return json.loads(output.getvalue())["scope_sha256"]
 
-    def _runner(self, argv, *, input, capture_output, text, encoding, cwd, env, timeout, check):
+    def _runner(self, argv, *, input, capture_output, text, encoding, cwd, env, timeout, check,
+                shell):
+        self.assertIs(shell, False)
         self.last_cli = {"argv": argv, "input": input, "cwd": cwd, "env": env}
         return SimpleNamespace(returncode=0, stdout='{"candidates":[]}', stderr="PRIVATE")
 
@@ -189,6 +191,37 @@ class RouterTests(unittest.TestCase):
                 self.plan, self.request, self.policy, preflight=scope,
                 approved_scope_sha256=scope["scope_sha256"], acknowledged=True)
 
+    def test_old_router_preflight_cannot_be_reused_after_upgrade(self):
+        scope = self._scope()
+        scope["scope"]["router_version"] = "personal-local-llm-router-1"
+        scope["scope_sha256"] = digest(json_bytes(scope["scope"]))
+        with patch("copilot_learning.local_llm_router.LocalModelProvider.generate") as generate:
+            with self.assertRaises(InvalidData):
+                run_with_approved_scope(
+                    self.plan, self.request, self.policy, preflight=scope,
+                    approved_scope_sha256=scope["scope_sha256"], acknowledged=True)
+            generate.assert_not_called()
+
+    def test_probe_reports_credentials_without_values_or_network(self):
+        from scripts.probe_personal_model_routes import probe
+        for token_name in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
+            with self.subTest(token_name=token_name), patch("shutil.which", return_value=None), \
+                    patch("socket.socket.connect") as network, patch("subprocess.run") as worker:
+                result = probe({"OPENAI_API_KEY": "SYNTHETIC-OPENAI-VALUE",
+                                "CODEX_API_KEY": "SYNTHETIC-CODEX-VALUE",
+                                token_name: "SYNTHETIC-COPILOT-VALUE"})
+                self.assertTrue(result["openai_api_key_configured"])
+                self.assertTrue(result["codex_api_key_configured"])
+                self.assertTrue(result["copilot_token_configured"])
+                self.assertFalse(result["authentication_validated"])
+                self.assertNotIn("SYNTHETIC", json.dumps(result))
+                network.assert_not_called()
+                worker.assert_not_called()
+        with patch("shutil.which", return_value=None):
+            empty = probe({})
+        self.assertFalse(empty["codex_api_key_configured"])
+        self.assertFalse(empty["copilot_token_configured"])
+
     def test_secrets_and_non_personal_requests_fail(self):
         for secret in ("test@example.org", "090-1234-5678",
                        "sk-123456789012345678901234567890",
@@ -260,16 +293,18 @@ class RouterTests(unittest.TestCase):
         result, _ = run_with_approved_scope(
             self.plan, req, self.policy,
             preflight=scope, approved_scope_sha256=scope["scope_sha256"],
-            acknowledged=True, env={"PATH": "/synthetic", "COPILOT_ALLOW_ALL": "true"},
+            acknowledged=True, env={"PATH": "/synthetic", "COPILOT_ALLOW_ALL": "true",
+                                    "CODEX_API_KEY": "SYNTHETIC-CODEX"},
             runner=self._runner)
         argv = self.last_cli["argv"]
         self.assertEqual(argv[:2], ["codex", "exec"])
-        for item in ("--ephemeral", "--ignore-user-config", "read-only",
+        for item in ("--ephemeral", "--ignore-user-config", "--skip-git-repo-check", "read-only",
                      "--model", "synthetic-codex-reviewer", "-"):
             self.assertIn(item, argv)
         self.assertNotIn(req["prompt"], " ".join(argv))
         self.assertIn(req["prompt"], self.last_cli["input"])
         self.assertNotIn("COPILOT_ALLOW_ALL", self.last_cli["env"])
+        self.assertEqual(self.last_cli["env"]["CODEX_API_KEY"], "SYNTHETIC-CODEX")
         self.assertFalse(result["independent_reviewer_passed"])
 
     def test_copilot_cli_no_all_access_and_isolated_home(self):
@@ -281,15 +316,18 @@ class RouterTests(unittest.TestCase):
             self.plan, req, self.policy, preflight=scope,
             approved_scope_sha256=scope["scope_sha256"], acknowledged=True,
             env={"PATH": "/synthetic", "COPILOT_ALLOW_ALL": "true",
-                 "COPILOT_GITHUB_TOKEN": "SYNTHETIC-GH"}, runner=self._runner)
+                 "COPILOT_GITHUB_TOKEN": "SYNTHETIC-GH",
+                 "CODEX_API_KEY": "UNRELATED-SYNTHETIC-CODEX"}, runner=self._runner)
         argv = self.last_cli["argv"]
         self.assertEqual(argv[0], "copilot")
-        for item in ("-s", "--no-ask-user", "--model",
+        for item in ("-s", "--no-ask-user", "--no-auto-update", "--no-custom-instructions",
+                     "--disable-builtin-mcps", "--model",
                      "--deny-tool=shell,write,read,url,memory"):
             self.assertIn(item, argv)
         self.assertNotIn(req["prompt"], " ".join(argv))
         self.assertIn(req["prompt"], self.last_cli["input"])
         self.assertNotIn("COPILOT_ALLOW_ALL", self.last_cli["env"])
+        self.assertNotIn("CODEX_API_KEY", self.last_cli["env"])
         self.assertTrue(self.last_cli["env"]["COPILOT_HOME"].endswith("copilot-home"))
         self.assertFalse(result["approved_for_copilot"])
 

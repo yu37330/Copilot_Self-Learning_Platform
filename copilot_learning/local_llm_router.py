@@ -15,6 +15,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+from .cli_process import resolve_cli_command
 from .core import InvalidData, SHA_PATTERN, assert_external_output, check_sensitive, digest, json_bytes
 from .model_review_contract import TRACKS, MODEL_ROLES, validate_model_plan
 from .privacy_scan import BUILTIN_RULES, load_policy
@@ -22,7 +23,7 @@ from .skill_preview import ROOT, _path
 
 LOCAL_BACKENDS = frozenset({"openai_api", "codex_cli", "copilot_cli"})
 API_URL = "https://api.openai.com/v1/responses"
-VERSION = "personal-local-llm-router-1"
+VERSION = "personal-local-llm-router-2"
 MAX_INPUT_BYTES = 64 * 1024
 MAX_OUTPUT_BYTES = 128 * 1024
 MAX_SYSTEM_CHARS = 8000
@@ -164,7 +165,7 @@ def _openai(model: str, system: str, prompt: str, *,
         with sender(req, timeout=timeout) as stream:
             raw = stream.read(MAX_API_RESULT + 1)
     except Exception:
-        # Errors may contain response bodies, personal data, URL or token.
+        # 例外本文には応答・個人情報・URL・認証情報が含まれる場合がある。
         raise InvalidData("OpenAI APIの呼び出しに失敗") from None
     if len(raw) > MAX_API_RESULT:
         raise InvalidData("API応答が容量上限超過")
@@ -214,11 +215,12 @@ def _minimum_env(source: dict[str, str], backend: str, directory: Path) -> dict[
             "APPDATA", "LOCALAPPDATA", "LANG", "LC_ALL", "CODEX_HOME")
     output = {name: source[name] for name in keys if name in source}
     if backend == "codex_cli":
-        # User config/MCP ignored via --ignore-user-config; existing auth may be used.
-        if source.get("OPENAI_API_KEY"):
-            output["OPENAI_API_KEY"] = source["OPENAI_API_KEY"]
+        # ユーザー設定は読み込まず、既存ログインまたは実行用APIキーを利用する。
+        for name in ("OPENAI_API_KEY", "CODEX_API_KEY"):
+            if source.get(name):
+                output[name] = source[name]
     else:
-        # A fresh COPILOT_HOME prevents loading persistent project agents/MCP.
+        # 一時ホームで永続設定の読込を避け、指定された実行用トークンを引き継ぐ。
         output["COPILOT_HOME"] = str(directory / "copilot-home")
         for name in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
             if source.get(name):
@@ -239,20 +241,25 @@ def _cli(backend: str, model: str, system: str, prompt: str, *,
         directory = Path(base)
         if backend == "codex_cli":
             args = ["codex", "exec", "--ephemeral", "--ignore-user-config",
+                    "--skip-git-repo-check",
                     "--sandbox", "read-only", "--cd", str(directory),
                     "--model", model, "-"]
         elif backend == "copilot_cli":
             (directory / "copilot-home").mkdir()
-            args = ["copilot", "-s", "--no-ask-user", "--model", model,
+            args = ["copilot", "-s", "--no-ask-user", "--no-auto-update",
+                    "--no-custom-instructions", "--disable-builtin-mcps", "--model", model,
                     "--deny-tool=shell,write,read,url,memory"]
         else:
             raise InvalidData("不明なCLI")
         child = _minimum_env(env, backend, directory)
         invoke = runner or subprocess.run
         try:
+            # Windowsのnpmランチャーもシェルを介さず、Nodeの実入口を呼ぶ。
+            if runner is None:
+                args = [*resolve_cli_command(args[0], child), *args[1:]]
             result = invoke(args, input=combined, capture_output=True,
                             text=True, encoding="utf-8", cwd=str(directory),
-                            env=child, timeout=timeout, check=False)
+                            env=child, timeout=timeout, check=False, shell=False)
         except (OSError, subprocess.TimeoutExpired):
             raise InvalidData("モデルCLIが利用不能か制限時間超過") from None
         if result.returncode != 0 or not isinstance(result.stdout, str):
