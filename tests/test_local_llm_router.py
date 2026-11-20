@@ -354,6 +354,55 @@ class RouterTests(unittest.TestCase):
                 "preflight", *self._args(), "--out", str(repo / "out"),
             ]), 2)
 
+    def test_offline_retro_draft_requires_separate_manual_review(self):
+        from scripts.prepare_personal_model_request import draft_from_artifact
+        source = {
+            "schema_version": "1.0", "record_type": "offline-retro-review-request",
+            "system": "Return safe synthetic JSON proposals", "data": {"findings": []},
+            "external_transfer_authorized": False,
+        }
+        draft = draft_from_artifact(source, "generator")
+        self.assertFalse(draft["manual_content_reviewed"])
+        self.assertEqual(draft["role"], "generator")
+        with self.assertRaises(InvalidData):
+            make_preflight(self.plan, draft, policy_sha256="a"*64, literals=[])
+        draft["source_classification"] = "personal_or_synthetic_only"
+        draft["manual_content_reviewed"] = True
+        scoped = make_preflight(self.plan, draft, policy_sha256="a"*64, literals=[])
+        self.assertEqual(scoped["scope"]["target"]["backend"], "copilot_cli")
+
+    def test_offline_reviewer_draft_preserves_review_hash(self):
+        from scripts.prepare_personal_model_request import draft_from_artifact
+        source = {
+            "schema_version": "1.0",
+            "record_type": "offline-retro-independent-review-request",
+            "system": "Review synthetic evidence; return JSON decisions",
+            "candidates": [{"proposal_id": "synthetic"}],
+            "external_transfer_authorized": False,
+        }
+        draft = draft_from_artifact(source, "reviewer")
+        payload = json.loads(draft["prompt"])
+        self.assertEqual(payload["request_sha256"], digest(json_bytes(source)))
+        self.assertFalse(draft["manual_content_reviewed"])
+        with self.assertRaises(InvalidData):
+            make_preflight(self.plan, draft, policy_sha256="a"*64, literals=[])
+
+    def test_draft_rejects_unexpected_online_source(self):
+        from scripts.prepare_personal_model_request import draft_from_artifact
+        source = {
+            "record_type": "offline-retro-review-request",
+            "system": "Synthetic system", "data": {},
+            "external_transfer_authorized": True,
+        }
+        with self.assertRaises(InvalidData):
+            draft_from_artifact(source, "generator")
+
+    def test_bedrock_backend_is_not_modified_or_invoked(self):
+        p = deepcopy(self.plan)
+        p["tracks"]["knowledge"]["generator"]["backend"] = "bedrock"
+        with self.assertRaises(InvalidData):
+            make_preflight(p, self.request, policy_sha256="a"*64, literals=[])
+
     def test_preflight_no_network_or_subprocess(self):
         with patch("socket.socket.connect") as net, patch("subprocess.run") as run:
             self._preflight()
