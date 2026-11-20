@@ -127,8 +127,17 @@ def _model_json(text: str, literals: list[str]) -> dict[str, Any]:
     if not isinstance(text, str) or not 0 < len(text.encode("utf-8")) <= MAX_OUTPUT_BYTES:
         raise InvalidData("モデル応答が空か容量上限超過")
     check_prompt(text, literals)
+    def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise InvalidData("モデル応答のJSONフィールドが重複")
+            result[key] = value
+        return result
     try:
-        data = json.loads(text)
+        data = json.loads(text, object_pairs_hook=unique,
+                          parse_constant=lambda _: (_ for _ in ()).throw(
+                              InvalidData("非有限モデル出力は使えません")))
     except ValueError as exc:
         raise InvalidData("モデル応答は単一のJSONオブジェクトが必要") from exc
     if not isinstance(data, dict):
