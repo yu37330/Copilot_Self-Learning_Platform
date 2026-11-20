@@ -282,9 +282,7 @@ class CodexRolloutTests(unittest.TestCase):
         info = json.loads(stdout.getvalue())
         self.assertNotIn("PRIVATE", stdout.getvalue())
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(cli([*self._args()[:1], *self._args()[1:],
-                                  "--expected-receipt-sha256", info["receipt_sha256"]]) if False else
-                             cli(["verify", *self._args()[1:],
+            self.assertEqual(cli(["verify", *self._args()[1:],
                                   "--expected-receipt-sha256", info["receipt_sha256"]]), 0)
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli([*self._args()]), 2)
