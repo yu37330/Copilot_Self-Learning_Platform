@@ -11,6 +11,7 @@ from typing import Any
 
 from .core import InvalidData, digest, json_bytes
 from .instruction_review import grade_response, instruction_inventory, review_request, _scan_text
+from .instruction_review import _surface_from_sessions
 from .model_review_contract import validate_model_plan
 from .privacy_scan import load_policy
 from .session_retro import analyze_sessions
@@ -34,7 +35,9 @@ def prepare_independent_review(sessions: list[dict[str, Any]], repo: Path,
     """モデルに送信しないレビュー資料。候補作成のモデルと独立Reviewerを区別。"""
     routing = validate_model_plan(model_plan)
     terms, policy_sha = load_policy(policy)
-    inventory = instruction_inventory(repo, terms["sensitive_literals"])
+    inventory = instruction_inventory(
+        repo, terms["sensitive_literals"],
+        surface=_surface_from_sessions(sessions))
     request = review_request(sessions, inventory)
     graded, _diff = grade_response(sessions, inventory, proposals, repo, terms["sensitive_literals"])
     # この関数は外部サービスにデータを渡さない。差分はプレビュー内のみで管理。

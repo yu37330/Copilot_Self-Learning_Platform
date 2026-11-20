@@ -161,6 +161,12 @@ Codex CLIや対応するローカルセッションのrollout-*.jsonlを、明�
 
 入力元と保存先はGit管理外。**保存ZIPには選別した発言が含まれるため、機密情報として取り扱うこと。** Windows実機の保存先に291件（約158MB）のrolloutが存在することを本文未読で確認しましたが、実セッションのJSON本文による互換性・性能改善は未検証です。使用手順と安全制約は[Codex取込ガイド](docs/codex-rollout-ingest-20261120.md)を参照してください。
 
+### Codex専用Phase B：AGENTS.md / Skillsの未適用差分検査
+
+Codex由来の検証済みsession ZIPを選ぶと、Codex用のAGENTS.md・階層別AGENTS.md・.agents/skills/*/SKILL.mdを対象に、既存のPhase Bで改善提案を検査できます。別製品と混在した入力は拒否します。.codex/config.toml等はSHA棚卸しのみで、モデル・権限・役割TOMLへのdiffは作成しません。
+
+実機の古いrollout1件（204,738バイト、15レコード）の**イベント構造だけをローカルで確認**しました。未知top-level=2件、未知event_msg=3件があり、内容の完全取込・原因分析は未検証です。会話本文・コマンドは出力していません。構造診断の安全なCLI、Phase Bのrequest/grade/verify、利用制限は[Codex Phase Bと構造診断](docs/codex-phase-b-review-20261120.md)を参照してください。
+
 ## セッションのローカル準備
 
 ```powershell

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .core import InvalidData, digest, json_bytes, assert_external_output
-from .instruction_review import grade_response, instruction_inventory, _scan_text
+from .instruction_review import grade_response, instruction_inventory, _scan_text, _surface_from_sessions
 from .privacy_scan import load_policy
 from .retro_llm_review import prepare_independent_review, grade_independent_review
 from .skill_preview import ROOT, RESERVED, _path
@@ -29,7 +29,9 @@ def prepare_final_review(sessions: list[dict[str, Any]], repo: Path, policy: Pat
                          reviewer_output: dict[str, Any]) -> tuple[dict[str, Any], dict[str, bytes]]:
     """Recompute original evidence and model-plan binding BEFORE constructing a diff."""
     terms, policy_sha = load_policy(_path(policy))
-    inventory = instruction_inventory(repo, terms["sensitive_literals"])
+    inventory = instruction_inventory(
+        repo, terms["sensitive_literals"],
+        surface=_surface_from_sessions(sessions))
     request = prepare_independent_review(sessions, repo, policy, proposals, model_plan)
     opinion = grade_independent_review(
         request, reviewer_output, model_plan, sensitive_literals=terms["sensitive_literals"])
