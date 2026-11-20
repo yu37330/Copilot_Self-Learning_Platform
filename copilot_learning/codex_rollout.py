@@ -214,11 +214,24 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
             unsupported["unknown_response_item"] += 1
     if metadata_id is None:
         raise InvalidData("Codexのsession_metaを確認できません")
-    users = native_user if native_user else fallback_user
+    # Codexは同じユーザー発言をevent_msgとresponse_itemの両方に記録し得る。
+    # ただしevent_msgが一部欠けた場合は、その分を無言で捨てない。
+    remaining = Counter(item[3] for item in native_user)
+    supplemental: list[tuple[int, str, str, str]] = []
+    duplicate_count = 0
+    for item in fallback_user:
+        if remaining[item[3]] > 0:
+            remaining[item[3]] -= 1
+            duplicate_count += 1
+        else:
+            supplemental.append(item)
+    users = [*native_user, *supplemental]
     if not users:
         raise InvalidData("セッションに安全に認識できるユーザー発言がありません")
-    if native_user and fallback_user:
-        ignored["duplicate_user_response_items"] += len(fallback_user)
+    if duplicate_count:
+        ignored["duplicate_user_response_items"] += duplicate_count
+    if supplemental and native_user:
+        unsupported["user_event_msg_missing_somewhere"] += len(supplemental)
     selected = sorted([*users, *assistant], key=lambda x: x[0])
     if len(selected) > MAX_EMITTED_MESSAGES:
         raise InvalidData("取込メッセージの件数が上限超過です")
@@ -237,7 +250,7 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
         "line_count": nonempty,
         "recognized_message_count": len(selected),
         "native_user_message_count": len(native_user),
-        "fallback_user_response_count": len(fallback_user) if not native_user else 0,
+        "fallback_user_response_count": len(supplemental),
         "assistant_output_text_count": len(assistant),
         "tool_calls_by_category": dict(sorted(tool_categories.items())),
         "tool_call_count": sum(tool_categories.values()),
