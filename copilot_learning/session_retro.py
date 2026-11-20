@@ -153,7 +153,9 @@ def _validated_sessions(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # Codexで実際に認識される指示先。通常のCopilotセッションの扱いは従来どおり。
 CODEX_TARGETS = {
     "instruction_conflict": "AGENTS.md",
-    "role_boundary": ".codex/agents/NAME.toml",
+    # Codex agent role configs are linked via agents.<name>.config_file,
+    # not necessarily located under one fixed directory.
+    "role_boundary": "configured_agent_role_manual_review",
     "path_specific": "path/to/AGENTS.md",
     "missing_verification": "AGENTS.md",
     "repeatable_workflow": ".agents/skills/NAME/SKILL.md",
