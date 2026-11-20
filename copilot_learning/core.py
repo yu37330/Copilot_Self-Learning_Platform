@@ -203,7 +203,10 @@ def normalize_events(manifest: dict[str, Any], events: list[dict[str, Any]]) -> 
         "timestamp_fallback_count": timestamp_fallback_count,
         "source_provenance": {"archive_sha256": manifest["archive_sha256"],
                               "manifest_sha256": manifest.get("_snapshot_manifest_sha256"),
-                              "s3_version_id": None},
+                              "s3_version_id": None,
+                              # Codex取込済みZIPだけに形式を明示し、後段で誤ったCopilotターゲットを避ける。
+                              **({"source_format": "codex-rollout-jsonl-v1"}
+                                 if manifest.get("source_format") == "codex-rollout-jsonl-v1" else {})},
     }
 
 
