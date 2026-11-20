@@ -308,7 +308,8 @@ class RouterTests(unittest.TestCase):
 
     def test_model_output_requires_one_json_object_and_scans_secrets(self):
         self.assertEqual(_model_json('{"decisions":[]}', []), {"decisions": []})
-        for bad in ("[1,2]", "not-json", "", '{"foo":"test@example.org"}'):
+        for bad in ("[1,2]", "not-json", "", '{"foo":"test@example.org"}',
+                    '{"a":1,"a":2}', '{"a":NaN}'):
             with self.subTest(bad=bad), self.assertRaises(InvalidData):
                 _model_json(bad, [])
 
@@ -343,6 +344,13 @@ class RouterTests(unittest.TestCase):
                 "--output-json", str(export),
             ]), 0)
         self.assertEqual(json.loads(export.read_text("utf-8")), {"candidates": []})
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(command([
+                "export-json", *self._args(), "--preflight", str(self.preflight),
+                "--expected-manifest-sha256", manifest_sha, "--out", str(self.out),
+                "--output-json", str(self.out / "extra.json"),
+            ]), 2)
+        self.assertFalse((self.out / "extra.json").exists())
 
     def test_modified_response_breaks_local_verify(self):
         approved = self._preflight()
