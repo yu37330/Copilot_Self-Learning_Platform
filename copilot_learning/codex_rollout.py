@@ -187,7 +187,7 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
                                     _guard_text(text, literals)))
                 if payload.get("local_images") or payload.get("text_elements"):
                     unsupported["user_context_not_replayed"] += 1
-            elif subtype in {"error", "turn_aborted"}:
+            elif isinstance(subtype, str) and subtype in {"error", "turn_aborted"}:
                 errored_or_interrupted += 1
                 ignored["agent_error_or_interrupt"] += 1
             elif known_event:
@@ -200,7 +200,7 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
         kind = payload.get("type")
         if kind == "message":
             role = payload.get("role")
-            if role not in {"user", "assistant"}:
+            if not isinstance(role, str) or role not in {"user", "assistant"}:
                 ignored["non_user_assistant_message"] += 1
                 continue
             if role == "assistant" and (payload.get("channel") not in (None, "final", "commentary")
@@ -221,10 +221,10 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
             item = (line_number, role, _utc(record.get("timestamp")),
                     _guard_text(text, literals))
             (fallback_user if role == "user" else assistant).append(item)
-        elif kind in TOOL_TYPES:
+        elif isinstance(kind, str) and kind in TOOL_TYPES:
             tool_categories[_tool_category(payload.get("name"))] += 1
             ignored["tool_call_arguments_excluded"] += 1
-        elif kind in OUTPUT_TYPES:
+        elif isinstance(kind, str) and kind in OUTPUT_TYPES:
             ignored["tool_result_excluded"] += 1
         elif kind == "reasoning":
             ignored["reasoning_excluded"] += 1
