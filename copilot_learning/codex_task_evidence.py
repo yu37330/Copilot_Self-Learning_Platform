@@ -52,11 +52,8 @@ def _test_xml(raw: bytes) -> dict[str, Any]:
         raise InvalidData("テスト報告XMLが不正です") from exc
     if root.tag not in {"testsuite", "testsuites"}:
         raise InvalidData("JUnit XMLの最上位が未対応")
+    # .//testcase also covers direct children; do not double count.
     cases = root.findall(".//testcase")
-    if root.tag == "testsuite":
-        cases += root.findall("./testcase")
-        # findall('.//testcase') already includes children; deduplicate by identity.
-        cases = list(dict.fromkeys(cases))
     if not 1 <= len(cases) <= MAX_CASES:
         raise InvalidData("JUnit testcase数が上限外")
     failed = errors = skipped = 0
@@ -123,7 +120,7 @@ def _binding(data: Any, index: dict[str, Any]) -> tuple[str, dict[str, Any] | No
     if data["rollout_sha256"] != index["rollout_sha256"] or data["test_report_sha256"] != index["test_report_sha256"]:
         raise InvalidData("指定したタスクの証拠原本SHAが一致しません")
     claim = data["completion_claim"]
-    if claim not in {"not_claimed", "reported_complete"}:
+    if not isinstance(claim, str) or claim not in {"not_claimed", "reported_complete"}:
         raise InvalidData("完了状態は申告のみでなければなりません")
     git = data["github"]
     if git is not None:
@@ -143,6 +140,8 @@ def evaluate_task(index: dict[str, Any], binding: dict[str, Any]) -> dict[str, A
         recommended = "test_report_missing"
     elif test["failed_case_count"] or test["error_case_count"]:
         recommended = "test_report_contains_failures"
+    elif test["cases_without_fail_error_skip"] == 0:
+        recommended = "test_report_all_skipped_execution_unverified"
     else:
         recommended = "test_report_clean_but_executor_not_verified"
     telemetry = index["rollout_metadata"]["event_telemetry"]
