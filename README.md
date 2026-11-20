@@ -173,6 +173,14 @@ Codex rolloutから、公式EventMsgのタスク開始/終了、warning/error、
 
 実PCの古いrollout1件では、以前の未知top-level2件がtoken_usage_record / world_state、未知event_msg3件がtask_started / item_completed×2と分類できました。イベント型の認識が進んでも内部内容は復元していません。詳細は[Codexイベントテレメトリ](docs/codex-event-telemetry-20261120.md)。
 
+### Codex Task Evidence：Task ID・JUnit・GitHub参照の匿名照合
+
+Codex rolloutの固定数値と、手動指定したJUnit XMLテスト報告・GitHub PR番号を、**原本SHAと明示的なTask ID**で束ねるオフライン経路を追加しました。XMLのtestcase数と成否を解析し、GitHub PRは参照形式まで検査します。ただしテスト実行の真正性やGitHubの実マージ状態はオンライン検証していないため、**business_completion_verified=falseを維持**します。
+
+    python .\scripts\review_codex_task_evidence_offline.py index --rollout "C:\path\to\rollout-...jsonl" --test-report "$env:USERPROFILE\codex-private\junit.xml" --policy "$env:USERPROFILE\codex-private\policy.json" --out "$env:USERPROFILE\codex-private\source-index-01" --acknowledge-local-analysis
+
+index → 手動Task ID紐付け → review → 独立manifest SHAのverifyの手順は [Codex Task Evidenceガイド](docs/codex-task-evidence-20261120.md) を参照。原本はGit管理外、外部送信や自動指示変更はなし。
+
 ## セッションのローカル準備
 
 ```powershell

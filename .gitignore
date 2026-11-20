@@ -46,3 +46,8 @@ task-bindings.json
 rollout-*.jsonl
 codex-import-receipt.json
 codex-analysis.preview.json
+
+# Issue #46: Codex Task ID / JUnit連携の原票とプレビュー
+codex-task-sources.index.json
+codex-task-evidence.preview.json
+codex-task-evidence-binding.json

@@ -12,7 +12,7 @@ from typing import Any
 
 from .codex_rollout import _source, MAX_LINES
 from .codex_event_telemetry import CodexTelemetry, KNOWN_EVENT_TYPES, KNOWN_TOP_METADATA_TYPES
-from .core import InvalidData
+from .core import InvalidData, digest
 
 TOP_TYPES = {"session_meta", "event_msg", "response_item", "turn_context", "compacted"} | KNOWN_TOP_METADATA_TYPES
 EVENT_TYPES = KNOWN_EVENT_TYPES
@@ -22,7 +22,8 @@ MAX_SCHEMA_PROBE = 16 * 1024 * 1024
 
 
 def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440,
-                      include_telemetry: bool = False) -> dict[str, Any]:
+                      include_telemetry: bool = False,
+                      include_source_sha256: bool = False) -> dict[str, Any]:
     """JSONの固定された型フィールドのみ計数する。任意の文字列は無視する。"""
     # This loads the data *locally*, but never exports raw record text.
     data = _source(path, minimum_age_minutes)
@@ -105,4 +106,8 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440,
     if telemetry is not None:
         summary["event_telemetry"] = telemetry.report()
         summary["telemetry_scope"] = "fixed_numeric_fields_and_event_types_only"
+    if include_source_sha256:
+        # Return a digest of the exact bytes parsed in this single read.
+        # No second file read that could race an update.
+        summary["source_rollout_sha256"] = digest(data)
     return summary
