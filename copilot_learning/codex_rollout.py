@@ -339,7 +339,7 @@ def _prepare(rollout: Path, policy_path: Path, *, min_age_minutes: int,
 def _destination(path: Path) -> Path:
     out = _path(path)
     assert_external_output(out, ROOT)
-    if any(part.rstrip(" .").casefold() in RESERVED for part in out.parts):
+    if any(part.rstrip(" .").casefold() in (RESERVED | {".codex"}) for part in out.parts):
         raise InvalidData("Git/エージェント自動読込先には保存できません")
     return out
 
@@ -388,7 +388,7 @@ def verify_rollout(rollout: Path, policy: Path, directory: Path, *,
         raise InvalidData("独立保管したreceipt SHA-256が必要です")
     out = _destination(directory)
     receipt_file = _path(out / RECEIPT_FILE)
-    if not receipt_file.is_file() or receipt_file.stat().st_size > 256_000:
+    if not receipt_file.is_file() or receipt_file.stat().st_size > 1_000_000:
         raise InvalidData("取込receiptが不在または上限超過です")
     pinned_raw = receipt_file.read_bytes()
     if digest(pinned_raw) != expected_receipt_sha256:
