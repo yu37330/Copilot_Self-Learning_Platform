@@ -247,6 +247,34 @@ class CodexRolloutTests(unittest.TestCase):
         self.assertIn("other_tool", data)
         self.assertNotIn("PRIVATE-INTERNAL-NAME", data)
 
+    def test_partially_missing_native_user_event_is_preserved(self):
+        self.events.insert(4, {
+            "timestamp": TS, "type": "response_item",
+            "payload": {"type": "message", "role": "user",
+                        "content": [{"type": "input_text", "text": "追加の依頼です"}]},
+        })
+        self._write_rollout()
+        import_rollout(self.rollout, self.policy, self.out)
+        preview = json.loads((self.out / PREVIEW_FILE).read_text("utf-8"))
+        self.assertEqual(preview["provenance"]["recognized_message_count"], 5)
+        self.assertEqual(preview["provenance"]["fallback_user_response_count"], 1)
+        self.assertEqual(preview["provenance"]["ignored_event_categories"]["duplicate_user_response_items"], 1)
+        self.assertEqual(preview["provenance"]["unsupported_categories"]["user_event_msg_missing_somewhere"], 1)
+
+    def test_sensitive_assistant_output_is_rejected_without_leak(self):
+        self.events[3]["payload"]["content"][0]["text"] = "これは秘密の連絡先test@example.org"
+        self._write_rollout()
+        with self.assertRaises(InvalidData) as caught:
+            import_rollout(self.rollout, self.policy, self.out)
+        self.assertNotIn("test@example.org", str(caught.exception))
+        self.assertFalse(self.out.exists())
+
+    def test_codex_home_is_not_an_output_directory(self):
+        with self.assertRaises(InvalidData):
+            import_rollout(self.rollout, self.policy,
+                           self.root / ".codex" / "sessions" / "generated")
+        self.assertFalse((self.root / ".codex").exists())
+
     def test_invalid_timestamp_is_rejected(self):
         self.events[2]["timestamp"] = "2026-11-19T14:00:01"
         self._write_rollout()
