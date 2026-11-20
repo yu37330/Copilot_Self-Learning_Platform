@@ -264,11 +264,21 @@ class LocalModelProvider:
     def __init__(self, backend: str, model_id: str, *,
                  sensitive_literals: list[str], env: dict[str, str] | None = None,
                  opener: Callable | None = None, runner: Callable | None = None,
-                 timeout: int = 120):
+                 timeout: int = 120, approved_scope_sha256: str | None = None,
+                 approved_payload_sha256: str | None = None):
         if backend not in LOCAL_BACKENDS or not isinstance(model_id, str) or not model_id:
             raise InvalidData("ローカルモデルのbackend/model_idが不正")
         if type(timeout) is not int or not 1 <= timeout <= 300:
             raise InvalidData("timeoutは1〜300秒")
+        # Prevent direct accidental invocation from older pipelines without a
+        # preflight-bound scope. SHA is not a signature or corporate permission.
+        if (not isinstance(approved_scope_sha256, str)
+                or not SHA_PATTERN.fullmatch(approved_scope_sha256)
+                or not isinstance(approved_payload_sha256, str)
+                or not SHA_PATTERN.fullmatch(approved_payload_sha256)):
+            raise InvalidData("モデル実行には承認済みの本文スコープが必要です")
+        self.approved_scope_sha256 = approved_scope_sha256
+        self.approved_payload_sha256 = approved_payload_sha256
         self.backend = backend
         self.model_id = model_id
         self.sensitive_literals = sensitive_literals
@@ -277,6 +287,10 @@ class LocalModelProvider:
         self.last_metadata: dict[str, Any] = {}
 
     def generate(self, prompt: str, *, system: str) -> dict[str, Any]:
+        if (not isinstance(system, str) or not isinstance(prompt, str)
+                or digest(json_bytes({"system": system, "prompt": prompt}))
+                   != self.approved_payload_sha256):
+            raise InvalidData("実行時の本文と承認スコープが一致していません")
         check_prompt(system + "\n" + prompt, self.sensitive_literals)
         if self.backend == "openai_api":
             text, info = _openai(self.model_id, system, prompt, env=self.env,
@@ -307,7 +321,9 @@ def run_with_approved_scope(plan: dict[str, Any], request: dict[str, Any], polic
     provider = LocalModelProvider(
         target["backend"], target["model_id"],
         sensitive_literals=terms["sensitive_literals"],
-        env=env, opener=opener, runner=runner, timeout=timeout)
+        env=env, opener=opener, runner=runner, timeout=timeout,
+        approved_scope_sha256=expected["scope_sha256"],
+        approved_payload_sha256=expected["scope"]["payload_sha256"])
     output = provider.generate(request["prompt"], system=request["system"])
     report = {
         "schema_version": "1.0", "record_type": "untrusted-personal-model-response",
