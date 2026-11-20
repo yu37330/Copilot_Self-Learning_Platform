@@ -39,7 +39,10 @@ task-trace.index.json
 task-trace.review.json
 task-bindings.json
 
-# Issue #46: Codexのローカル分析プレビューと改変検証レシート
-.codex/
+# Issue #46: Codexの個人セッション履歴と分析プレビューのみ除外
+# .codex/config.toml や .codex/agents/ は正規の設定として追跡できる。
+.codex/sessions/
+.codex/archived_sessions/
+rollout-*.jsonl
 codex-import-receipt.json
 codex-analysis.preview.json
