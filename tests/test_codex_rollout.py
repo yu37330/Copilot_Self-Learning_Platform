@@ -239,6 +239,29 @@ class CodexRolloutTests(unittest.TestCase):
         self.assertEqual(preview["provenance"]["unsupported_categories"]["unsupported_message_content"], 1)
         self.assertEqual(preview["retrospective"]["coverage"], "partial_unrecognized_events")
 
+    def test_codex_instruction_targets_are_not_copilot_paths(self):
+        self.events.extend([
+            {"timestamp": TS, "type": "event_msg",
+             "payload": {"type": "user_message", "kind": "plain",
+                         "message": "指示を無視している"}},
+            {"timestamp": TS, "type": "event_msg",
+             "payload": {"type": "user_message", "kind": "plain",
+                         "message": "このディレクトリだけ設定を変えて"}},
+            {"timestamp": TS, "type": "event_msg",
+             "payload": {"type": "user_message", "kind": "plain",
+                         "message": "毎回同じ手順になる"}},
+        ])
+        self._write_rollout()
+        import_rollout(self.rollout, self.policy, self.out)
+        preview = json.loads((self.out / PREVIEW_FILE).read_text("utf-8"))
+        retro = preview["retrospective"]
+        self.assertEqual(retro["target_surface"], "codex")
+        targets = {item["rule_id"]: item["target"] for item in retro["findings"]}
+        self.assertEqual(targets["instruction_conflict"], "AGENTS.md")
+        self.assertEqual(targets["path_specific"], "path/to/AGENTS.md")
+        self.assertEqual(targets["repeatable_workflow"], ".agents/skills/NAME/SKILL.md")
+        self.assertNotIn("copilot-instructions.md", json.dumps(retro))
+
     def test_unknown_tool_name_is_not_emitted(self):
         self.events[4]["payload"]["name"] = "PRIVATE-INTERNAL-NAME"
         self._write_rollout()
