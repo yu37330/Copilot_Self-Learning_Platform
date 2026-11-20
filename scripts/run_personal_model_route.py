@@ -192,8 +192,10 @@ def main(argv: list[str] | None = None) -> int:
                 # No provider call: extract previously verified, untrusted JSON only.
                 extracted = _read_result(_outside(args.out) / RESPONSE)["response"]
                 target = _outside(args.output_json)
-                if target.suffix.lower() != ".json" or target.exists():
-                    raise InvalidData("JSONを既存ファイルへ上書きできません")
+                completed = _outside(args.out)
+                if (target == completed or completed in target.parents
+                        or target.suffix.lower() != ".json" or target.exists()):
+                    raise InvalidData("保存済み検証結果フォルダにはJSONを書き込めません")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with target.open("xb") as handle:
                     handle.write(json_bytes(extracted))
