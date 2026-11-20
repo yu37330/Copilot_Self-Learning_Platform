@@ -11,16 +11,18 @@ from pathlib import Path
 from typing import Any
 
 from .codex_rollout import _source, MAX_LINES
+from .codex_event_telemetry import CodexTelemetry, KNOWN_EVENT_TYPES, KNOWN_TOP_METADATA_TYPES
 from .core import InvalidData
 
-TOP_TYPES = {"session_meta", "event_msg", "response_item", "turn_context", "compacted"}
-EVENT_TYPES = {"user_message", "agent_message", "turn_aborted", "error", "token_count"}
+TOP_TYPES = {"session_meta", "event_msg", "response_item", "turn_context", "compacted"} | KNOWN_TOP_METADATA_TYPES
+EVENT_TYPES = KNOWN_EVENT_TYPES
 RESPONSE_TYPES = {"message", "function_call", "function_call_output",
                   "custom_tool_call", "custom_tool_call_output", "reasoning"}
 MAX_SCHEMA_PROBE = 16 * 1024 * 1024
 
 
-def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[str, Any]:
+def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440,
+                      include_telemetry: bool = False) -> dict[str, Any]:
     """JSONの固定された型フィールドのみ計数する。任意の文字列は無視する。"""
     # This loads the data *locally*, but never exports raw record text.
     data = _source(path, minimum_age_minutes)
@@ -38,6 +40,7 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
     elements: Counter[str] = Counter()
     roles: Counter[str] = Counter()
     malformed = 0
+    telemetry = CodexTelemetry() if include_telemetry else None
     has_meta = False
     for i, line in enumerate(raw_lines):
         if not line.strip():
@@ -53,14 +56,21 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
         cat = entry["type"] if entry["type"] in TOP_TYPES else "other_top_type"
         tops[cat] += 1
         payload = entry["payload"]
+        if telemetry is not None:
+            if cat == "event_msg":
+                telemetry.event(payload, source_line=i + 1)
+            elif cat in KNOWN_TOP_METADATA_TYPES:
+                telemetry.top(cat, payload)
         if cat == "session_meta" and i == 0:
             has_meta = isinstance(payload.get("id"), str)
         if cat == "event_msg":
             event_kind = payload.get("type")
-            events[event_kind if event_kind in EVENT_TYPES else "other_event_type"] += 1
+            events[event_kind if isinstance(event_kind, str) and event_kind in EVENT_TYPES
+                   else "other_event_type"] += 1
         if cat == "response_item":
             response_kind = payload.get("type")
-            responses[response_kind if response_kind in RESPONSE_TYPES else "other_response_type"] += 1
+            responses[response_kind if isinstance(response_kind, str) and response_kind in RESPONSE_TYPES
+                      else "other_response_type"] += 1
             if response_kind == "message":
                 role = payload.get("role")
                 roles[role if role in {"user", "assistant", "system", "developer"}
@@ -71,11 +81,11 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
                 else:
                     for item in contents:
                         kind = item.get("type") if isinstance(item, dict) else None
-                        if kind in {"input_text", "output_text"}:
+                        if isinstance(kind, str) and kind in {"input_text", "output_text"}:
                             elements[kind] += 1
                         else:
                             elements["other_content_part"] += 1
-    return {
+    summary = {
         "schema_version": "1.0",
         "record_type": "codex-rollout-schema-shape-probe",
         "rollout_bytes": len(data),
@@ -92,3 +102,7 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
         "input_path_exported": False,
         "network_calls": 0,
     }
+    if telemetry is not None:
+        summary["event_telemetry"] = telemetry.report()
+        summary["telemetry_scope"] = "fixed_numeric_fields_and_event_types_only"
+    return summary

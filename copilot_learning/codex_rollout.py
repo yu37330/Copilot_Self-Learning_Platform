@@ -19,6 +19,10 @@ from .core import (
     content_fingerprint, digest, json_bytes, normalize_events, read_archive,
 )
 from .privacy_scan import BUILTIN_RULES, load_policy
+from .codex_event_telemetry import (
+    CodexTelemetry, KNOWN_TOP_METADATA_TYPES, UNREPLAYED_TOP_CONTEXT,
+    UNREPLAYED_EVENT_TYPES,
+)
 from .session_retro import analyze_sessions
 from .skill_preview import ROOT, RESERVED, _path
 from scripts.prepare_sessions import build_archive
@@ -33,7 +37,7 @@ PREVIEW_FILE = "codex-analysis.preview.json"
 SOURCE_FORMAT = "codex-rollout-jsonl-v1"
 KNOWN_TOP_TYPES = frozenset({
     "session_meta", "event_msg", "response_item", "turn_context", "compacted",
-})
+}) | KNOWN_TOP_METADATA_TYPES
 TOOL_TYPES = frozenset({"function_call", "custom_tool_call"})
 OUTPUT_TYPES = frozenset({"function_call_output", "custom_tool_call_output"})
 EMAIL_ANYWHERE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -124,6 +128,7 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
     ignored: Counter[str] = Counter()
     unsupported: Counter[str] = Counter()
     tool_categories: Counter[str] = Counter()
+    telemetry = CodexTelemetry()
     metadata_id: str | None = None
     errored_or_interrupted = 0
     nonempty = 0
@@ -156,11 +161,21 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
         if top not in KNOWN_TOP_TYPES:
             unsupported["unknown_top_type"] += 1
             continue
+        if top in KNOWN_TOP_METADATA_TYPES:
+            # No raw tool/config/context payload is exported.
+            telemetry.top(top, payload)
+            ignored["documented_metadata_" + top] += 1
+            if top in UNREPLAYED_TOP_CONTEXT:
+                unsupported["documented_context_not_replayed"] += 1
+            continue
         if top in {"turn_context", "compacted"}:
             ignored[top] += 1
+            if top == "compacted":
+                unsupported["compacted_context_not_replayed"] += 1
             continue
         if top == "event_msg":
             subtype = payload.get("type")
+            known_event = telemetry.event(payload, source_line=line_number)
             if subtype == "user_message":
                 text = payload.get("message")
                 if not isinstance(text, str) or not text.strip() or len(text) > MAX_EVENT_TEXT_CHARS:
@@ -173,16 +188,22 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
                                     _guard_text(text, literals)))
                 if payload.get("local_images") or payload.get("text_elements"):
                     unsupported["user_context_not_replayed"] += 1
-            elif subtype in {"error", "turn_aborted"}:
+            elif isinstance(subtype, str) and subtype in {"error", "turn_aborted"}:
                 errored_or_interrupted += 1
                 ignored["agent_error_or_interrupt"] += 1
+            elif known_event:
+                # 既知型でもtool/思考/役割などの中身を復元していない場合は部分カバレッジ。
+                ignored["known_event_msg_telemetry_only"] += 1
+                if subtype in UNREPLAYED_EVENT_TYPES:
+                    unsupported["documented_event_context_not_replayed"] += 1
             else:
-                ignored["other_event_msg"] += 1
+                # Previously this was silently ignored and incorrectly looked complete.
+                unsupported["unknown_event_msg_type"] += 1
             continue
         kind = payload.get("type")
         if kind == "message":
             role = payload.get("role")
-            if role not in {"user", "assistant"}:
+            if not isinstance(role, str) or role not in {"user", "assistant"}:
                 ignored["non_user_assistant_message"] += 1
                 continue
             if role == "assistant" and (payload.get("channel") not in (None, "final", "commentary")
@@ -203,10 +224,10 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
             item = (line_number, role, _utc(record.get("timestamp")),
                     _guard_text(text, literals))
             (fallback_user if role == "user" else assistant).append(item)
-        elif kind in TOOL_TYPES:
+        elif isinstance(kind, str) and kind in TOOL_TYPES:
             tool_categories[_tool_category(payload.get("name"))] += 1
             ignored["tool_call_arguments_excluded"] += 1
-        elif kind in OUTPUT_TYPES:
+        elif isinstance(kind, str) and kind in OUTPUT_TYPES:
             ignored["tool_result_excluded"] += 1
         elif kind == "reasoning":
             ignored["reasoning_excluded"] += 1
@@ -262,6 +283,7 @@ def _parse(raw: bytes, literals: list[str]) -> tuple[list[dict[str, Any]], dict[
         "coverage": "partial_unknown_or_context" if unsupported else "known_text_subset_only",
         "tool_success_evaluation": "not_performed",
         "task_outcome_verified": False,
+        "event_telemetry": telemetry.report(),
     }, metadata_id
 
 
@@ -317,6 +339,8 @@ def _prepare(rollout: Path, policy_path: Path, *, min_age_minutes: int,
             "Codexアプリ・CLIの全バージョンでの一致は未検証",
             "選別したユーザー発言・assistant output_textだけをローカルZIPに保存",
             "ツール引数・実行結果・内部推論・cwd・base_instructionsは出力しない",
+            "公式のタスク完了イベントはCodexのターン終了を表し、業務完了ではない",
+            "token_countは累積スナップショットであり、各イベントを合計しない",
             "失敗はCodexが明示したイベントのみ兆候として扱い、ツール成功を推測しない",
             "部分的な応答や画像等の隠れた文脈があれば入力カバレッジ不足とする",
             "静的機密検査は情報管理規程・組織DLPの代替にならない",
