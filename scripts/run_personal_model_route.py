@@ -6,8 +6,9 @@ import argparse
 import json
 import os
 import sys
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from copilot_learning.core import InvalidData, SHA_PATTERN, assert_external_output, digest, json_bytes
@@ -37,29 +38,69 @@ def _read_preflight(folder: Path) -> dict[str, Any]:
     return data
 
 
-def _write(out: Path, files: dict[str, bytes]) -> None:
+@contextmanager
+def _reserve_output(out: Path, names: tuple[str, ...]) -> Iterator[dict[str, BinaryIO]]:
+    """送信前に保存先を排他的に確保し、実際にファイルを開けることを確認する。"""
     folder = _outside(out)
     if folder.exists():
         raise InvalidData("既存のモデル結果フォルダには上書きしません")
     folder.parent.mkdir(parents=True, exist_ok=True)
     _path(folder.parent)
     folder.mkdir(mode=0o700)
-    created = []
+    folder_stat = folder.stat()
+    created: dict[str, tuple[Path, os.stat_result]] = {}
+    handles: dict[str, BinaryIO] = {}
+    stack = ExitStack()
     try:
-        for name, data in sorted(files.items()):
+        for name in sorted(names):
             target = folder / name
-            with target.open("xb") as handle:
-                created.append(target)
-                handle.write(data)
-                handle.flush()
-                os.fsync(handle.fileno())
+            handle = stack.enter_context(target.open("xb"))
+            created[name] = (target, os.fstat(handle.fileno()))
+            handles[name] = handle
+        yield handles
+        stack.close()
+        # 保存中にパスが差し替えられた場合、その別ファイルを完成品にしない。
+        if (_outside(folder) != folder
+                or not os.path.samestat(folder_stat, folder.stat())
+                or {p.name for p in folder.iterdir()} != set(names)):
+            raise InvalidData("モデル結果の保存先が変更されました")
+        for target, original in created.values():
+            if target.is_symlink() or not os.path.samestat(original, target.stat()):
+                raise InvalidData("モデル結果の保存ファイルが変更されました")
             target.chmod(0o400)
     except BaseException:
-        for target in reversed(created):
-            target.chmod(0o600)
-            target.unlink()
-        folder.rmdir()
+        stack.close()
+        # 失敗した今回の予約だけを片付け、差し替えられた他のファイルは削除しない。
+        for target, original in reversed(list(created.values())):
+            try:
+                _path(target)
+                if os.path.samestat(original, target.stat()):
+                    target.chmod(0o600)
+                    target.unlink()
+            except (InvalidData, OSError):
+                pass
+        try:
+            _path(folder)
+            if os.path.samestat(folder_stat, folder.stat()):
+                folder.rmdir()
+        except (InvalidData, OSError):
+            pass
         raise
+    finally:
+        stack.close()
+
+
+def _write_reserved(handles: dict[str, BinaryIO], files: dict[str, bytes]) -> None:
+    for name, data in sorted(files.items()):
+        handle = handles[name]
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _write(out: Path, files: dict[str, bytes]) -> None:
+    with _reserve_output(out, tuple(files)) as handles:
+        _write_reserved(handles, files)
 
 
 def _current(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -96,7 +137,7 @@ def _manifest(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _verify(args: argparse.Namespace, scope: dict[str, Any]) -> dict[str, Any]:
+def _verify(args: argparse.Namespace, scope: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     if (not isinstance(args.expected_manifest_sha256, str)
             or not SHA_PATTERN.fullmatch(args.expected_manifest_sha256)):
         raise InvalidData("独立保管済みのmanifest SHAが必要")
@@ -122,11 +163,12 @@ def _verify(args: argparse.Namespace, scope: dict[str, Any]) -> dict[str, Any]:
             or (out / RESPONSE).read_bytes() != json_bytes(response)
             or (out / MANIFEST).read_bytes() != json_bytes(receipt)):
         raise InvalidData("レポート・manifestのSHAまたは出典が不一致です")
-    return {
+    summary = {
         "status": "local_model_output_bytes_verified_not_approved",
         "model_identity_independently_verified": False,
         "knowledge_quality_verified": False, "network_calls": 0,
     }
+    return summary, response["response"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -173,12 +215,13 @@ def main(argv: list[str] | None = None) -> int:
             }
         elif args.action == "run":
             pinned = _read_preflight(args.preflight)
-            report, _ = run_with_approved_scope(
-                plan, request, args.policy, preflight=pinned,
-                approved_scope_sha256=args.approved_scope_sha256,
-                acknowledged=args.acknowledge_external_send, timeout=args.timeout)
-            manifest = _manifest(report)
-            _write(args.out, {RESPONSE: json_bytes(report), MANIFEST: json_bytes(manifest)})
+            with _reserve_output(args.out, (RESPONSE, MANIFEST)) as handles:
+                report, _ = run_with_approved_scope(
+                    plan, request, args.policy, preflight=pinned,
+                    approved_scope_sha256=args.approved_scope_sha256,
+                    acknowledged=args.acknowledge_external_send, timeout=args.timeout)
+                manifest = _manifest(report)
+                _write_reserved(handles, {RESPONSE: json_bytes(report), MANIFEST: json_bytes(manifest)})
             result = {
                 "status": "model_called_output_unapproved",
                 "backend": report["backend"], "role": report["role"],
@@ -187,10 +230,9 @@ def main(argv: list[str] | None = None) -> int:
                 "approved_for_instructions": False,
             }
         else:
-            result = _verify(args, scope)
+            result, extracted = _verify(args, scope)
             if args.action == "export-json":
-                # No provider call: extract previously verified, untrusted JSON only.
-                extracted = _read_result(_outside(args.out) / RESPONSE)["response"]
+                # 検証済みの同じオブジェクトを抽出し、ファイルの再読込はしない。
                 target = _outside(args.output_json)
                 completed = _outside(args.out)
                 if (target == completed or completed in target.parents

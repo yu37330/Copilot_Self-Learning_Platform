@@ -4,7 +4,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 
 **想定利用者：Windows PCでGitHub Copilot（CLI／デスクトップアプリ）を使う開発者。個人・チーム・企業いずれも対象です。** セッションの保存形式はCopilotの製品/版によって異なり、対象Windows実機での検証はまだ行っていません。
 
-> **AWS実送受信・モデル呼出しは停止中です。** `-Upload` / `--execute` / `--use-bedrock` では解除できません。個人利用でもデータ所有者の許可・送信先/認証の安全性確認が必要で、組織利用では所属先の規程・SSO/DLP等が追加要件になります。**現行コードの外部通信停止は利用形態にかかわらず解除できません。** Copilotへの自動インストールも行いません。
+> **既存AWSルートの実送受信・モデル呼出しは停止中です。** `-Upload` / `--execute` / `--use-bedrock` では解除できません。個人PCでは、別の[自宅用モデルルート](docs/personal-local-model-routes-20261120.md)から OpenAI API / Codex CLI / GitHub Copilot CLI を明示的に実行できます。データの確認と送信先の認証設定が必要です。組織利用では所属先の規程・SSO/DLP等も確認してください。Copilotへの自動インストールは行いません。
 
 ## ライセンス
 
@@ -32,6 +32,7 @@ GitHub Copilotの開発履歴を後から検証し、AgentCore Memory標準・Ag
 | セッション振り返り・指示改善 | Issue #31 Phase A: 兆候抽出、Phase B: 指示改善diffのオフライン独立検査、Phase C: 変更前後の未学習タスク比較・費用/手戻りの提出済み観測集計。実Copilotログ・LLM・改善効果は未検証 |
 | 第3系統：ChatGPT Task Improvement | Issue #41: ChatGPT会話の選択分岐＋Desktop Commander実行履歴をGit管理外で匿名集計。共通Task IDの自動紐付け・実業務成功判定・LLM評価は未実装 |
 | WM/WOの共通Wiki出力 | OKF v0.2のdraft、出典・脚注・索引・ハッシュ検査。Runtimeのモデル呼出経路は実装、実LLMは未検証 |
+| 自宅用モデルルート | OpenAI API / Codex CLI / GitHub Copilot CLI をknowledge/retrospectiveの生成・評価役ごとに選択。単発実行・結果検証・JSON抽出を実装。実モデルでの認証・応答品質は未検証 |
 | 単一Runtime（CodeZip）・S3起動Lambda | HTTP入口、既存処理の統合、依存同梱ZIP、CFN定義・モック結合検証。AWS実デプロイ未実施 |
 | Copilotへの動的注入・Workflow実行 | 未実装 |
 
@@ -183,12 +184,12 @@ index → 手動Task ID紐付け → review → 独立manifest SHAのverifyの�
 
 ### 自宅用モデルルート（Issue #52）
 
-Bedrock AgentCoreを変更せず、個人PCで利用する **OpenAI Responses API / Codex CLI / GitHub Copilot CLI** の生成・独立評価ルートを追加しました。既存の知識学習とSession Retrospectiveのgenerator/reviewerを、model-planのbackendとmodel_idで切り替えられます。
+個人PCで利用する **OpenAI Responses API / Codex CLI / GitHub Copilot CLI** のモデル呼出ルートを追加しました。model-requestのtrack・roleに対応するmodel-planのbackend・model_idを選び、1回ずつ実行します。knowledgeとretrospectiveのgenerator/reviewerをそれぞれ設定できます。生成から評価への自動連続実行は行わず、Retrospectiveの応答JSONは既存Phase Bの検査へ渡せます。
 
     python .\scripts\probe_personal_model_routes.py
     python .\scripts\run_personal_model_route.py preflight --plan "$env:USERPROFILE\private-llm\model-plan.json" --request "$env:USERPROFILE\private-llm\model-request.json" --policy "$env:USERPROFILE\private-llm\policy.json" --out "$env:USERPROFILE\private-llm\preflight-001"
 
-デフォルトでは外部送信なし。内容を個人・合成データとして本人が検査し、送信先モデル・本文・辞書を固定したscope SHAに個別承認した場合のみ、CLI/APIに1回送信できます。実モデル呼出、費用、環境の認証成功は未確認。職場データの自動送信、AWSオンライン安全ゲート解除、GitHub Actions/CI、AGENTS.md/Skills自動変更はなし。詳しい設定・run/verify/export-jsonは[自宅用モデルルート手順](docs/personal-local-model-routes-20261120.md)を参照してください。
+最初に使う経路の認証設定とモデルIDを用意してください。Codexは保存済み認証またはCODEX_API_KEY等、OpenAI APIはOPENAI_API_KEY、専用の一時設定で動かすCopilotルートは対応するGitHubトークン環境変数を使います。内容確認後、preflightで作ったscope SHAを指定してrunすると1回送信します。実モデル呼出、費用、環境の認証成功は未確認です。Bedrock AgentCoreは従来の別経路です。詳しい初期設定・run/verify/export-jsonは[自宅用モデルルート手順](docs/personal-local-model-routes-20261120.md)を参照してください。
 
 ## セッションのローカル準備
 

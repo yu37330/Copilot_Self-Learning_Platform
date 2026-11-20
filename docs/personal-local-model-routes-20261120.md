@@ -7,39 +7,65 @@ Issue #52、2026-11-20。Copilot Self-Learning Platformの既存Knowledge Learni
 | backend | 実行手段 | 主な条件 |
 |---|---|---|
 | openai_api | 公式OpenAI Responses API、store=false、tools指定なし | OPENAI_API_KEYが必要。API利用はChatGPT契約と別課金の場合がある |
-| codex_cli | codex exec --ephemeral --sandbox read-only --ignore-user-config --model | 対応Codex CLIと認証が必要。プロジェクト設定を無視し空の一時作業ディレクトリで実行 |
-| copilot_cli | copilot、stdin入力、-s、--no-ask-user、--model、--deny-tool=shell,write,read,url,memory | 対応GitHub Copilot CLIと認証が必要。専用の一時COPILOT_HOMEを使用 |
+| codex_cli | codex exec --ephemeral --sandbox read-only --ignore-user-config --skip-git-repo-check --model | 対応Codex CLIと認証が必要。空の一時作業ディレクトリはGit管理外なので、Gitリポジトリ検査だけを省略 |
+| copilot_cli | copilot、stdin入力、-s、--no-ask-user、--model、--deny-tool=shell,write,read,url,memory、--no-auto-update、--no-custom-instructions、--disable-builtin-mcps | 対応GitHub Copilot CLIと認証が必要。専用の一時COPILOT_HOMEを使用 |
 | bedrock / AgentCore | 従来のAWSルート | **今回未変更、外部実行安全ゲート停止を維持** |
 
 ※ Codex CLIのread-onlyは読み取り専用の意味で、ファイル閲覧も原理上あり得る。Copilotの拒否ルールや一時HOMEもすべてのプラグイン/認証情報へのアクセスを証明するものではない。職場のPC・企業情報を入力しないことが前提。
 
-OpenAI公式資料：
-- https://developers.openai.com/api/docs/guides/migrate-to-responses
-- https://learn.chatgpt.com/docs/non-interactive-mode
-GitHub公式資料：
-- https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference
-- https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/run-cli-programmatically
+公式資料：[OpenAI Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses)、[Codexの非対話実行](https://learn.chatgpt.com/docs/non-interactive-mode)、[Copilot CLIプログラム実行リファレンス](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference)、[Copilot CLI自動実行](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/run-cli-programmatically)。
 
 2026-11-20にWindows DESKTOP-KM8CL39で環境変数の**有無だけ**を確認：Codex CLIは存在し、execのephemeral/read-only/ignore-user-configフラグを確認。Copilot CLIはPATH上になく、OPENAI_API_KEYも未設定。**実課金を発生させるモデル呼び出しはしていない**。使うモデルIDやCLIのバージョン・エンタイトルメントは個人PC側で確認する必要がある。
 
-## まず環境を確認
+## まず環境と認証を準備
+
+リポジトリのルートで、Python 3.10以降を使って実行する。以下の診断はローカルの設定有無だけを調べ、モデルを呼び出さない。
 
 ~~~powershell
 python .\scripts\probe_personal_model_routes.py
 ~~~
 
-この診断はコマンドの存在とOpenAI APIキーの設定有無だけを表示し、鍵の内容・個人名・パスやモデルリクエストは表示しない。ネットワーク接続・認証確認をしない。
+この診断はコマンドの存在、OpenAI APIキー・Codex APIキー・対応するCopilotトークン環境変数の設定有無だけを表示し、鍵の内容・個人名・パスやモデルリクエストは表示しない。ネットワーク接続・認証確認をしない。
+
+選ぶ経路だけを準備すればよい。すべてのCLIやAPI契約を揃える必要はない。
+
+| 選択するbackend | 個人PCで用意するもの |
+|---|---|
+| openai_api | 利用権限のあるモデルIDと、そのプロセスの`OPENAI_API_KEY`。ChatGPTのログイン情報はこのHTTP呼出しに使わない |
+| codex_cli | `codex`がPATH上にあること、必要なフラグに対応したCLI、保存済みのCodex認証または`CODEX_API_KEY`等のAPI認証。CLIの仕様は`codex exec --help`で確認できる |
+| copilot_cli | `copilot`がPATH上にあること、上のフラグに対応したCLI、モデルの利用権限、`COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`のいずれか。このルートは一時`COPILOT_HOME`を使うため、普段のCopilotログイン保存ファイルを引き継ぐ前提にしない |
+
+キーやトークンは個人PCの環境変数で設定し、model-plan、model-requestや公開リポジトリには書き込まない。`probe`の`true`は認証成功やモデル利用権限を意味しない。
+
+Windowsのnpm版CLIは、認識できたパッケージ内のCLI本体をNode.jsから直接起動するため、Node.jsも利用可能であることが必要。PATH上の実行ファイルにも対応するが、独自の起動ラッパーは受け付けない。`probe`でCLIの存在が`true`でも起動成功を検証したことにはならない。
 
 ## 個人/合成の入力を明示的に準備
 
 Git管理外のprivateなフォルダを用意し、次の合成サンプルをコピーして、**実際に契約上利用可能なモデルIDに書き換える**。
 
 ~~~powershell
-Copy-Item .\examples\personal_local_model_plan.synthetic.json "$env:USERPROFILE\private-llm\model-plan.json"
-Copy-Item .\examples\personal_local_model_request.synthetic.json "$env:USERPROFILE\private-llm\model-request.json"
+# 新しい作業フォルダを作る。既存ファイルは上書きしない。
+$work = Join-Path $env:USERPROFILE 'private-llm'
+New-Item -ItemType Directory -Path $work -ErrorAction Stop
+Copy-Item .\examples\personal_local_model_plan.synthetic.json (Join-Path $work 'model-plan.json')
+Copy-Item .\examples\personal_local_model_request.synthetic.json (Join-Path $work 'model-request.json')
+# 合成サンプル用の空辞書。実データでは送信しない固有語を追加する。
+$policy = '{"schema_version":"1.0","record_type":"offline-sensitive-literals","sensitive_literals":[]}'
+[System.IO.File]::WriteAllText((Join-Path $work 'policy.json'), $policy, (New-Object System.Text.UTF8Encoding($false)))
 ~~~
 
-※ private-llmフォルダは先に作成する。モデル計画の2系統（knowledgeとretrospective）は、generatorとreviewerで異なるmodel_idを指定する必要がある。provider_familyは自己申告にすぎず、独立評価モデルの実提供元を検証したことにはならない。
+model-planには2系統（knowledgeとretrospective）のgenerator/reviewerをすべて記載する。各系統のgeneratorとreviewerは異なるmodel_idにする。同じbackendを4枠に指定することもできるので、たとえばCodexだけを使う場合は4枠のbackendを`codex_cli`へ変更し、各系統に生成用・評価用の利用可能なモデルIDを設定する。
+
+実行先は、model-requestの`track`と`role`で選ぶ。サンプルの組合せは次のとおり。**サンプルのmodel-requestをそのまま使うとretrospective/generator、つまりCodex CLIが選ばれる。** OpenAI APIを試す場合は、その枠のbackendとmodel_idを変えるか、依頼に合わせてtrack/roleを選び直す。
+
+| track | role | サンプルのbackend | 用途 |
+|---|---|---|---|
+| knowledge | generator | openai_api | 知識候補の生成 |
+| knowledge | reviewer | copilot_cli | 知識候補の独立評価 |
+| retrospective | generator | codex_cli | 指示改善案の生成 |
+| retrospective | reviewer | openai_api | 指示改善案の独立評価 |
+
+`provider_family`は実際に選んだモデルの提供元に合わせる自己申告ラベルで、経路名そのものではない。`external_transfer_authorized`は計画上`false`のままにする。実行への同意は後述のrun引数で指定する。`max_input_tokens`は計画値であり、このルータがトークン数を計測して強制する上限ではない。本文には別途文字数・バイト数の制限がある。
 
 Windows PowerShell 5.1で Set-Content -Encoding UTF8 を使ってpolicy.json等を作ると、UTF-8のBOMが先頭に付く場合がある。既存の機密辞書検査はBOM付きJSONを拒否する。UTF-8 **BOMなし**で保存すること。たとえば既存ファイルをBOMなしで保存し直す場合、次のローカル操作を利用できる。
 
@@ -52,6 +78,7 @@ $body = [System.IO.File]::ReadAllText($path)
 初期の合成preflight実機確認でも、BOM付きpolicy.jsonでは送信前に拒否され、BOMなしに保存し直すと preflight_only_no_model_call で成功した（backend=codex_cli、role=generator、prompt_bytes=276、network_calls=0）。認証・モデル実行は行っていない。
 
 入力JSONの必須項目：
+
 - track は knowledge または retrospective
 - role は generator または reviewer
 - system はモデルへのタスク指示、prompt は実際に送る本文
@@ -66,7 +93,7 @@ $body = [System.IO.File]::ReadAllText($path)
 python .\scripts\prepare_personal_model_request.py --artifact "$env:USERPROFILE\private-llm\phase-b-reviewer-request.preview.json" --role generator --out "$env:USERPROFILE\private-llm\review-request-draft.json" --acknowledge-local-copy
 ~~~
 
-生成した下書きはsource_classification=UNREVIEWED_REQUIRES_HUMAN_CLASSIFICATION、manual_content_reviewed=falseなので**そのままではpreflightできない**。個人/合成データだけが含まれることを実際に確認して、利用可否を判定し、本人が2項目を編集する必要がある。別モデルによるReviewerに渡す場合は独立Reviewer用のoffline-retro-independent-review-requestの下書きをrole=reviewerで作る。抽出・評価結果には、さらに既存の独立Gradeと安全ゲートが必要。
+生成した下書きはsource_classification=UNREVIEWED_REQUIRES_HUMAN_CLASSIFICATION、manual_content_reviewed=falseなので**そのままではpreflightできない**。下書きは読み取り専用で保存されるため、Windowsではファイルのプロパティで読み取り専用を解除してから開く。個人/合成データだけが含まれることを確認して、本人がこの2項目を編集する。別モデルによるReviewerには独立Reviewer用のoffline-retro-independent-review-requestをrole=reviewerで変換する。後段の検査手順は[2モデルレビュー手順](dual-model-review-20261120.md)を参照する。
 
 ## 事前検査 → 明示承認 → 実行
 
@@ -80,13 +107,15 @@ python .\scripts\run_personal_model_route.py preflight --plan "$env:USERPROFILE\
 
 返されたscope_sha256を別途控える。生成されたscope.preflight.jsonには本文を含めず、backend/model_id/role/入力サイズ/ハッシュだけを保持する。**送信内容は必ず元のmodel-request.jsonを開いて確認する**。scope SHAは本人の電子署名や業務利用許可を証明するものではない。
 
+今回のCLI互換性修正でルータのバージョンは`personal-local-llm-router-2`になった。旧版で作ったpreflightはrunと一致しないので、新しい出力先でpreflightを作り直す。旧版の保存済み結果のverify/export-jsonもv2では拒否するため、既存結果を検証するときは作成に使ったv1コードを使う。本文、モデル計画、辞書を変更したときもpreflightを作り直す。
+
 2. 送信先、モデル、本文の扱いを本人が確認した上でのみrun。下のSCOPE_SHAをpreflightの出力に置き換える。
 
 ~~~powershell
 python .\scripts\run_personal_model_route.py run --plan "$env:USERPROFILE\private-llm\model-plan.json" --request "$env:USERPROFILE\private-llm\model-request.json" --policy "$env:USERPROFILE\private-llm\policy.json" --preflight "$env:USERPROFILE\private-llm\preflight-001" --approved-scope-sha256 "SCOPE_SHA" --acknowledge-external-send --out "$env:USERPROFILE\private-llm\model-result-001"
 ~~~
 
-この操作のみ外部送信を実行する（送信先は選択したopenai_apiまたは認証済みCLIのプロバイダ）。外部モデル実行は料金・クォータを消費する可能性がある。自動リトライはせず、失敗理由/CLI標準エラーをそのまま表示しない。OpenAI APIではstore=falseを送るが、**ゼロ保管・ゼロログ・組織DLPの保証ではない**。
+この操作のみ外部送信を実行する（送信先は選択したopenai_apiまたは認証済みCLIのプロバイダ）。外部モデル実行は料金・クォータを消費する可能性がある。`--out`には新規フォルダを指定し、保存先の不備は呼出し前に検査する。自動リトライはせず、失敗理由/CLI標準エラーをそのまま表示しない。OpenAI APIではstore=falseを送るが、**ゼロ保管・ゼロログ・組織DLPの保証ではない**。
 
 3. runで返るmanifest_sha256を独立に控え、verifyで原本と出力を確認。verifyは**モデルを再実行しない**。
 
@@ -100,7 +129,9 @@ python .\scripts\run_personal_model_route.py verify --plan "$env:USERPROFILE\pri
 python .\scripts\run_personal_model_route.py export-json --plan "$env:USERPROFILE\private-llm\model-plan.json" --request "$env:USERPROFILE\private-llm\model-request.json" --policy "$env:USERPROFILE\private-llm\policy.json" --preflight "$env:USERPROFILE\private-llm\preflight-001" --expected-manifest-sha256 "MANIFEST_SHA" --out "$env:USERPROFILE\private-llm\model-result-001" --output-json "$env:USERPROFILE\private-llm\untrusted-proposals.json"
 ~~~
 
-このJSONは既存Phase Bのinstruction_review_offline.pyの--proposalなどへ渡せるが、**モデルの回答構造が既存契約に適合することは保証されない**。そのため既存のgrade_response/独立reviewer/最終確認へ通し、証拠不足・危険な差分は保留する。モデルのsupport判断だけで指示ファイルを自動更新しない。
+生成役のJSONは既存Phase Bの`instruction_review_offline.py grade --proposal ...`で検査し、独立レビュー要求の作成には`dual_model_review_offline.py retro-request --proposals ...`を使う。評価役のJSONは同スクリプトの`retro-grade --reviewer-output ...`へ渡す。各コマンドにはstaging、fingerprint、repo、policy等の元資料も必要なので、詳しくは[Phase B手順](instruction-review-phase-b-20261119.md)と[2モデルレビュー手順](dual-model-review-20261120.md)を参照する。これらは別のコマンドであり、ルータが自動で連続実行することはない。
+
+**モデルの回答構造が既存契約に適合することは保証されない**。合成model-requestは接続確認用の短い依頼で、Phase Bの完全な提案形式を指定していない。実際の改善案作成には前述の既存レビュー原票から下書きを作り、既存のgrade_response/独立reviewer/最終確認へ通す。証拠不足・危険な差分は保留し、モデルのsupport判断だけで指示ファイルを自動更新しない。
 
 ## 設計上の残件
 
@@ -115,6 +146,8 @@ python .\scripts\run_personal_model_route.py export-json --plan "$env:USERPROFIL
 
 ~~~powershell
 python -m unittest discover -s tests -p test_local_llm_router.py -v
+python -m unittest discover -s tests -p test_cli_process.py -v
+python -m unittest discover -s tests -p test_personal_route_output.py -v
 ~~~
 
 全テストは合成データとAPI/CLIのモックによる検証であり、実環境での課金付き実行は行わない。

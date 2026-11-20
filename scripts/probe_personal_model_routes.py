@@ -12,6 +12,9 @@ def probe(env: dict[str, str] | None = None) -> dict:
     return {
         "schema_version": "1.0", "record_type": "personal-local-model-backend-probe",
         "openai_api_key_configured": bool(environment.get("OPENAI_API_KEY")),
+        "codex_api_key_configured": bool(environment.get("CODEX_API_KEY")),
+        "copilot_token_configured": any(environment.get(name) for name in (
+            "COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")),
         "codex_cli_on_path": shutil.which("codex") is not None,
         "copilot_cli_on_path": shutil.which("copilot") is not None,
         "authentication_validated": False,
