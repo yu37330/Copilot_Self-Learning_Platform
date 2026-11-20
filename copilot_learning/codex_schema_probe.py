@@ -36,6 +36,7 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
     events: Counter[str] = Counter()
     responses: Counter[str] = Counter()
     elements: Counter[str] = Counter()
+    roles: Counter[str] = Counter()
     malformed = 0
     has_meta = False
     for i, line in enumerate(raw_lines):
@@ -61,6 +62,9 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
             response_kind = payload.get("type")
             responses[response_kind if response_kind in RESPONSE_TYPES else "other_response_type"] += 1
             if response_kind == "message":
+                role = payload.get("role")
+                roles[role if role in {"user", "assistant", "system", "developer"}
+                      else "other_role"] += 1
                 contents = payload.get("content")
                 if not isinstance(contents, list):
                     elements["missing_content_array"] += 1
@@ -82,6 +86,7 @@ def inspect_structure(path: Path, *, minimum_age_minutes: int = 1440) -> dict[st
         "event_categories": dict(sorted(events.items())),
         "response_categories": dict(sorted(responses.items())),
         "message_content_types": dict(sorted(elements.items())),
+        "message_role_categories": dict(sorted(roles.items())),
         "result": "structural_metadata_only_not_ingestion",
         "raw_text_exported": False,
         "input_path_exported": False,
