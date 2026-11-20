@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 from copilot_learning.core import InvalidData, digest, json_bytes
 from copilot_learning.local_llm_router import (
-    API_URL, _cli, _model_json, _openai, make_preflight, read_private_json,
+    API_URL, LocalModelProvider, _cli, _model_json, _openai, make_preflight, read_private_json,
     run_with_approved_scope,
 )
 from copilot_learning.model_review_contract import validate_model_plan
@@ -119,6 +119,23 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(result["models"]["knowledge"]["generator"]["backend"], "openai_api")
         self.assertEqual(result["models"]["knowledge"]["reviewer"]["backend"], "codex_cli")
         self.assertEqual(result["models"]["retrospective"]["generator"]["backend"], "copilot_cli")
+
+    def test_direct_provider_call_without_preflight_is_blocked(self):
+        with self.assertRaises(InvalidData):
+            LocalModelProvider("openai_api", "synthetic",
+                               sensitive_literals=[])
+
+    def test_changed_prompt_cannot_reuse_provider_scope(self):
+        scope = self._scope()
+        with patch("copilot_learning.local_llm_router.urllib.request.urlopen") as network:
+            model = LocalModelProvider(
+                "openai_api", "synthetic-openai-generator", sensitive_literals=[],
+                env={"OPENAI_API_KEY": "SYNTH"},
+                approved_scope_sha256=scope["scope_sha256"],
+                approved_payload_sha256=scope["scope"]["payload_sha256"])
+            with self.assertRaises(InvalidData):
+                model.generate("MUTATED PROMPT", system=self.request["system"])
+            network.assert_not_called()
 
     def test_same_generator_reviewer_model_disallowed(self):
         changed = deepcopy(self.plan)
