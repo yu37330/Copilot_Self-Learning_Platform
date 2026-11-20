@@ -170,6 +170,25 @@ class CodexTaskEvidenceTests(unittest.TestCase):
             with self.subTest(size=len(raw)), self.assertRaises(InvalidData):
                 _test_xml(raw)
 
+    def test_all_skipped_report_is_not_treated_as_green(self):
+        self.xml.write_bytes(
+            b'<testsuite tests="1" skipped="1">'
+            b'<testcase name="PRIVATE"><skipped/></testcase></testsuite>')
+        index = inspect_sources(self.rollout, self.xml, self.policy)
+        binding = deepcopy(self.binding)
+        binding["test_report_sha256"] = index["test_report_sha256"]
+        review = evaluate_task(index, binding)
+        self.assertEqual(review["test_status"],
+                         "test_report_all_skipped_execution_unverified")
+        self.assertFalse(review["business_completion_verified"])
+
+    def test_malformed_completion_claim_is_rejected_without_exception_leak(self):
+        for value in (["reported_complete"], {"status": "verified"}, None, 10):
+            binding = deepcopy(self.binding)
+            binding["completion_claim"] = value
+            with self.subTest(kind=type(value).__name__), self.assertRaises(InvalidData):
+                evaluate_task(self.index, binding)
+
     def test_report_checks_declared_counts(self):
         report = _test_xml(sample_junit())
         self.assertEqual(report["testcases_declared_and_parsed"], 3)
