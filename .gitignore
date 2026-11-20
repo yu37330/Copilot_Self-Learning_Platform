@@ -51,3 +51,10 @@ codex-analysis.preview.json
 codex-task-sources.index.json
 codex-task-evidence.preview.json
 codex-task-evidence-binding.json
+
+# Issue #52: 個人用モデルルータの秘密を含み得る原本と結果
+model-request.json
+model-plan.json
+scope.preflight.json
+model-response.preview.json
+untrusted-proposals.json

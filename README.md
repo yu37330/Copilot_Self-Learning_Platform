@@ -181,6 +181,15 @@ Codex rolloutの固定数値と、手動指定したJUnit XMLテスト報告・G
 
 index → 手動Task ID紐付け → review → 独立manifest SHAのverifyの手順は [Codex Task Evidenceガイド](docs/codex-task-evidence-20261120.md) を参照。原本はGit管理外、外部送信や自動指示変更はなし。
 
+### 自宅用モデルルート（Issue #52）
+
+Bedrock AgentCoreを変更せず、個人PCで利用する **OpenAI Responses API / Codex CLI / GitHub Copilot CLI** の生成・独立評価ルートを追加しました。既存の知識学習とSession Retrospectiveのgenerator/reviewerを、model-planのbackendとmodel_idで切り替えられます。
+
+    python .\scripts\probe_personal_model_routes.py
+    python .\scripts\run_personal_model_route.py preflight --plan "$env:USERPROFILE\private-llm\model-plan.json" --request "$env:USERPROFILE\private-llm\model-request.json" --policy "$env:USERPROFILE\private-llm\policy.json" --out "$env:USERPROFILE\private-llm\preflight-001"
+
+デフォルトでは外部送信なし。内容を個人・合成データとして本人が検査し、送信先モデル・本文・辞書を固定したscope SHAに個別承認した場合のみ、CLI/APIに1回送信できます。実モデル呼出、費用、環境の認証成功は未確認。職場データの自動送信、AWSオンライン安全ゲート解除、GitHub Actions/CI、AGENTS.md/Skills自動変更はなし。詳しい設定・run/verify/export-jsonは[自宅用モデルルート手順](docs/personal-local-model-routes-20261120.md)を参照してください。
+
 ## セッションのローカル準備
 
 ```powershell
