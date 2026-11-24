@@ -62,7 +62,8 @@ function readinessRow(name, item) {
   title.textContent = name;
   const detail = document.createElement("div");
   detail.className = "readiness-detail";
-  const available = item.installed && (item.key_configured || name !== "OpenAI API");
+  // CLIの存在だけで認証が済んでいると誤表示しない。
+  const available = item.installed && item.key_configured;
   if (name === "OpenAI API") {
     detail.textContent = item.key_configured ? "APIキー設定あり" : "APIキー未設定";
   } else {
@@ -103,6 +104,11 @@ async function loadStatus() {
     const status = await response.json();
     bootstrap = status;
     renderReadiness(status);
+    // Mock-onlyでは実際のモデルIDがなくても検証を始められる。
+    // Live modeはモデルIDを手動で指定する必要がある。
+    if (!status.allow_live && !el("modelId").value) {
+      el("modelId").value = "synthetic-demo-model";
+    }
     updateLiveControls();
   } catch (_) {
     alertText("ローカルサーバーへの接続を確認してください。", "error");
