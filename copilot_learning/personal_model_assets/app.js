@@ -226,7 +226,7 @@ function resetForm() {
   el("testForm").reset();
   el("system").value = "Return one JSON object with summary and suggestions. Do not run any tools.";
   el("prompt").value = "Synthetic example: the assistant reported a task complete before checking tests. Suggest one concrete verification step.";
-  el("modelId").value = "";
+  el("modelId").value = bootstrap && !bootstrap.allow_live ? "synthetic-demo-model" : "";
   invalidatePreflight();
   resultJSON({ status: "ready_for_local_test" });
   alertText("入力をリセットしました。実モデルへの送信は行いません。");
