@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""自宅用 OpenAI API / Codex CLI / Copilot CLI のブラウザテスト画面。
+r"""自宅用 OpenAI API / Codex CLI / Copilot CLI のブラウザテスト画面。
 
 実行例:
   py -3.12 .\scripts\start_personal_model_ui.py
