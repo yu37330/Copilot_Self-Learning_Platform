@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>Local Model Test Lab</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">◇</span><span>Learning Platform <span class="brand-muted">/ Test Lab</span></span></div>
+    <div class="top-status"><span class="dot"></span>127.0.0.1 LOCAL ONLY</div>
+  </header>
+
+  <div class="heading">
+    <div>
+      <div class="eyebrow">MODEL ROUTER / PERSONAL SANDBOX</div>
+      <h1>モデル検証を、<br><span>シンプルに。</span></h1>
+      <p>OpenAI API・Codex CLI・GitHub Copilot CLI の実行先を選び、<br class="desktop-only">
+      事前検査、模擬実行、結果確認をブラウザで行います。</p>
+    </div>
+    <div class="heading-note">
+      <div class="status-icon">⌁</div>
+      <strong id="modeLabel">準備中</strong>
+      <span id="modeDetail">初期状態では外部送信をしません</span>
+    </div>
+  </div>
+
+  <div class="notice">
+    <span class="notice-icon">!</span>
+    <span><strong>個人・合成データ専用。</strong> 会社・顧客・非公開コードや会話履歴は入力しないでください。
+    モックは実モデルを呼びません。実行には別起動オプションと個別承認が必要です。</span>
+  </div>
+
+  <div class="workspace">
+    <section class="panel editor" aria-labelledby="inputTitle">
+      <div class="panel-header">
+        <span class="step">01</span>
+        <div>
+          <h2 id="inputTitle">テスト条件</h2>
+          <p>接続先と、送る内容を選択</p>
+        </div>
+      </div>
+
+      <form id="testForm" autocomplete="off">
+        <div class="section-label">実行先</div>
+        <div class="backend-choice" role="radiogroup" aria-label="モデル実行先">
+          <label class="backend-card">
+            <input type="radio" name="backend" value="codex_cli" checked>
+            <span class="backend-visual">⌘</span><strong>Codex CLI</strong><small>自宅PCのCLI</small>
+          </label>
+          <label class="backend-card">
+            <input type="radio" name="backend" value="openai_api">
+            <span class="backend-visual">◎</span><strong>OpenAI API</strong><small>Responses API</small>
+          </label>
+          <label class="backend-card">
+            <input type="radio" name="backend" value="copilot_cli">
+            <span class="backend-visual">≋</span><strong>Copilot CLI</strong><small>GitHub Copilot</small>
+          </label>
+        </div>
+
+        <div class="two-cols">
+          <label class="field">
+            <span>モデルID <em>必須</em></span>
+            <input id="modelId" name="modelId" maxlength="200"
+                   placeholder="利用可能なモデルIDを入力" required spellcheck="false">
+          </label>
+          <label class="field">
+            <span>モデルの提供元 <span class="helper">(自己申告)</span></span>
+            <select id="modelFamily">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="google">Google</option>
+              <option value="amazon">Amazon</option>
+              <option value="meta">Meta</option>
+              <option value="mistral">Mistral</option>
+              <option value="other">その他</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>分析系統</span>
+            <select id="track">
+              <option value="retrospective">Session Retrospective / 指示改善</option>
+              <option value="knowledge">Knowledge Learning / 知識学習</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>モデルの役割</span>
+            <select id="role">
+              <option value="generator">Generator / 改善案生成</option>
+              <option value="reviewer">Reviewer / 独立評価</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="section-label space-top">テスト用テキスト</div>
+        <label class="field">
+          <span>System（指示）</span>
+          <textarea id="system" rows="3" maxlength="8000" spellcheck="false"></textarea>
+        </label>
+        <label class="field">
+          <span>Prompt（入力データ）</span>
+          <textarea id="prompt" rows="5" maxlength="30000" spellcheck="false"></textarea>
+        </label>
+
+        <label class="approval">
+          <input type="checkbox" id="reviewed">
+          <span>入力内容を自分で確認しました。個人データまたは合成データのみであり、社内・顧客情報を含みません。</span>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" id="preflightBtn" class="primary">事前検査を実行 <span>↗</span></button>
+          <button type="button" id="resetBtn" class="secondary">入力をリセット</button>
+        </div>
+        <p class="form-footnote">事前検査ではモデル呼び出し・外部送信・課金は発生しません。</p>
+      </form>
+    </section>
+
+    <aside class="stack">
+      <section class="panel status-panel" aria-labelledby="envTitle">
+        <div class="panel-header compact">
+          <span class="step muted">●</span>
+          <div><h2 id="envTitle">接続準備</h2><p>認証の成功ではなく設定の有無を表示</p></div>
+        </div>
+        <div id="environment" class="readiness" aria-live="polite">
+          <div class="loading">環境を確認しています…</div>
+        </div>
+        <button id="refreshBtn" type="button" class="inline-action">再確認 ↻</button>
+      </section>
+
+      <section class="panel result-panel" aria-labelledby="flowTitle">
+        <div class="panel-header compact">
+          <span class="step">02</span>
+          <div><h2 id="flowTitle">検査と実行</h2><p>承認スコープを確認してから進む</p></div>
+        </div>
+        <div class="stage-row">
+          <span class="stage-dot complete">1</span><span>送信なし事前検査</span>
+          <span id="preflightState" class="stage-state">未実行</span>
+        </div>
+        <div id="preflightDetails" class="scope-details hidden">
+          <div class="key-value"><span>Backend</span><strong id="scopeBackend">—</strong></div>
+          <div class="key-value"><span>Model</span><strong id="scopeModel">—</strong></div>
+          <div class="key-value"><span>入力サイズ</span><strong id="scopeSize">—</strong></div>
+          <div class="hash-label">承認スコープ SHA-256</div>
+          <code class="hash" id="scopeHash"></code>
+        </div>
+
+        <div class="stage-row">
+          <span class="stage-dot">2</span><span>モック動作確認</span>
+          <span id="mockState" class="stage-state">未実行</span>
+        </div>
+        <button id="mockBtn" type="button" class="secondary full" disabled>模擬実行（送信なし）</button>
+
+        <div class="stage-row last">
+          <span class="stage-dot">3</span><span>実モデルへ送信</span>
+          <span id="liveState" class="stage-state">未実行</span>
+        </div>
+        <div id="liveSection" class="live-section">
+          <p id="liveHelp">安全のため無効です。起動時に <code>--allow-live</code> が必要です。</p>
+          <label class="approval smaller">
+            <input id="liveApproved" type="checkbox" disabled>
+            <span>このスコープの本文を選択した外部モデルへ送信することを承認します。</span>
+          </label>
+          <label class="field">
+            <span>実行する場合は <code>SEND</code> と入力</span>
+            <input id="confirmInput" placeholder="SEND" autocomplete="off" disabled>
+          </label>
+          <button id="runBtn" type="button" class="danger full" disabled>実モデルで1回実行</button>
+        </div>
+        <p class="caution">実行後の結果は未承認です。AGENTS.md・Skillsを書き換えません。</p>
+      </section>
+
+      <section class="panel response-panel" aria-labelledby="outputTitle">
+        <div class="panel-header compact">
+          <span class="step">03</span>
+          <div><h2 id="outputTitle">実行結果</h2><p>ブラウザ内に表示。ファイル保存なし</p></div>
+        </div>
+        <div id="alert" role="status" aria-live="polite">ここに検査と実行の結果が表示されます。</div>
+        <pre id="resultText" class="output" aria-label="JSON実行結果">{
+  "status": "ready_for_local_test"
+}</pre>
+        <button id="copyBtn" type="button" class="inline-action">表示中のJSONをコピー</button>
+      </section>
+    </aside>
+  </div>
+
+  <footer>
+    <span>Personal Model Test Lab <b>·</b> Offline-first</span>
+    <span>127.0.0.1 限定 / 外部CDNなし / CI・AWSの設定変更なし</span>
+  </footer>
+</div>
+</body>
+</html>
