@@ -59,6 +59,13 @@ class UIServiceTests(unittest.TestCase):
             "metadata": {"reported_usage": {"input_tokens": 2}, "cost_usd": None},
         }, preflight)
 
+    def test_live_launcher_requires_explicit_policy(self):
+        import contextlib
+        import io
+        from scripts.start_personal_model_ui import main
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(main(["--allow-live", "--port", "0", "--no-browser"]), 2)
+
     def test_readiness_exposes_presence_not_credentials(self):
         status = readiness(
             {"OPENAI_API_KEY": "PRIVATE_OPENAI_KEY", "CODEX_API_KEY": "",
