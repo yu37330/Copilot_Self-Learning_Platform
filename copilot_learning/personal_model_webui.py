@@ -254,7 +254,7 @@ def make_server(policy: Path, *, port: int = 8765, allow_live: bool = False,
             self.send_header(
                 "Content-Security-Policy",
                 "default-src 'none'; script-src 'self'; style-src 'self'; "
-                "connect-src 'self'; img-src 'self'; form-action 'none'; base-uri 'none'; "
+                "connect-src 'self'; img-src 'self' data:; form-action 'none'; base-uri 'none'; "
                 "frame-ancestors 'none'")
             self.end_headers()
 
