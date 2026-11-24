@@ -182,6 +182,14 @@ Codex rolloutの固定数値と、手動指定したJUnit XMLテスト報告・G
 
 index → 手動Task ID紐付け → review → 独立manifest SHAのverifyの手順は [Codex Task Evidenceガイド](docs/codex-task-evidence-20261120.md) を参照。原本はGit管理外、外部送信や自動指示変更はなし。
 
+### 自宅用ブラウザテスト画面（Issue #55）
+
+API/CLIの設定を試しやすいように、**ローカル専用の簡易UI**を追加しました。Python標準ライブラリのみで実行でき、ブラウザ上でモデル・役割・合成テスト文を選んで、事前検査→モック結果→必要な場合だけ明示承認の実モデル呼出まで確認できます。
+
+    py -3.12 .\scripts\start_personal_model_ui.py
+
+同じPCで http://127.0.0.1:8765/ が開きます。**デフォルトは送信なし**。実モデルのテストには起動時の --allow-live とGit管理外の --policy、各依頼の画面上での個別承認が必要です。prompt/応答はサーバーディスクに保存しません。CLI実認証・モデル品質はまだ未確認です。[起動・画面操作・制約](docs/personal-model-test-ui-20261125.md)を参照してください。
+
 ### 自宅用モデルルート（Issue #52）
 
 個人PCで利用する **OpenAI Responses API / Codex CLI / GitHub Copilot CLI** のモデル呼出ルートを追加しました。model-requestのtrack・roleに対応するmodel-planのbackend・model_idを選び、1回ずつ実行します。knowledgeとretrospectiveのgenerator/reviewerをそれぞれ設定できます。生成から評価への自動連続実行は行わず、Retrospectiveの応答JSONは既存Phase Bの検査へ渡せます。
