@@ -32,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args(argv)
     try:
+        # 実送信モードでは空の合成辞書を暗黙に使用しない。
+        if args.allow_live and args.policy is None:
+            raise InvalidData("実送信にはGit管理外の機密語辞書の指定が必要です")
         with tempfile.TemporaryDirectory(prefix="local-model-ui-private-") as temp:
             if args.policy is None:
                 # Empty dictionary is for synthetic tests only and does NOT
